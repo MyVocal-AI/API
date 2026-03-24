@@ -1,0 +1,59 @@
+---
+title: "Introduction"
+description: "Clone voices with MyVocal, then turn them into speech or AI song covers."
+---
+
+<Info>
+MyVocal is built around voice cloning. Once you have a voice, you can use it for text-to-speech or AI song covers.
+</Info>
+
+## What you can build with MyVocal
+
+- Clone a custom voice with the Voice API.
+- Generate speech with that voice using the Text-to-Speech API.
+- Create AI song covers with the same voice using the AI Cover API.
+
+## Core workflow
+
+Most MyVocal integrations follow a simple flow:
+
+1. Clone or prepare a voice
+2. Use the voice for text-to-speech
+3. Use the same voice for AI song covers
+
+## How TTS models work
+
+If you are calling the Text-to-Speech API, you can either use the default model path or explicitly choose a public `modelId` such as `myvocal_v3`.
+
+- <b>Default model path</b>: do not send `modelId`.
+- <b>Explicit model path</b>: send a public `modelId`, for example `myvocal_v3`.
+
+Publicly documented model IDs in this phase:
+
+```text
+myvocal_v3
+english_v2
+spanish_es
+portuguese_pt
+multilingual_v2
+spanish_la
+portuguese_la
+```
+
+<Warning>
+`English(US)` currently uses the default model path. A public explicit `modelId` for `English(US)` is not published in this phase.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={3}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Make your first MyVocal API call in a few steps.
+  </Card>
+  <Card title="Authentication" icon="key" href="/api-reference/authentication">
+    Use your accessKey to authenticate API requests.
+  </Card>
+  <Card title="TTS Models & Migration" icon="arrows-rotate" href="/api-reference/tts/models">
+    Learn when to use the default TTS path and when to use `myvocal_v3`.
+  </Card>
+</CardGroup>

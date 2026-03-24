@@ -1,0 +1,60 @@
+---
+title: "Update Voice Name"
+api: "PUT https://api.myvocal.ai/sound_clone/api/v1/voices/rename/{id}"
+description: "Update Voice Name"
+---
+
+
+### Header
+<ParamField header="accessKey"   type="string" required>
+  You can copy your api-key on https://www.myvocal.ai/profile after you have subscribed to Pro or Business Plan.
+</ParamField>
+
+### Path
+<ParamField path="id" type="Long" required>
+  Your voiceId
+</ParamField>
+### Body
+<ParamField body="name" type="string" required>
+  Your new voice name
+</ParamField>
+
+### Response
+
+<ResponseField name="code" type="number">
+  Indicates whether the call was successful. 1 if successful.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  When an exception occurs, specific exception information will be provided in the message.
+</ResponseField>
+
+
+<RequestExample>
+
+```bash Example Request
+curl --location --request PUT 'https://api.myvocal.ai/sound_clone/api/v1/voices/rename/7812' \
+--header 'accessKey: xxx' \
+--header 'Content-Type: application/json' \
+--data '{
+	"name": "rename"
+}'
+```
+</RequestExample>
+
+<ResponseExample>
+
+```json  200（success）
+{
+  "code": 1,
+  "message": "Success",
+}
+```
+```json  200（fail）
+{
+  "code": -1,
+  "message": "error msg",
+}
+```
+
+</ResponseExample>

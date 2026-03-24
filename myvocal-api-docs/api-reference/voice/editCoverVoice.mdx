@@ -1,0 +1,79 @@
+---
+title: "Improve an AI Cover Voice"
+api: "PUT https://docs.myvocal.ai/sound_clone/api/v1/voices/vc/{voiceId}"
+header: "content-type: multipart/form-data"
+description: "Edit a custom AI Cover voice. You can upload more files to improve a custom voice(❗❗❗File-related interfaces are not supported, please use interface tools for requests.)"
+---
+
+### Header
+<ParamField header="accessKey"   type="string" required>
+  You can copy your api-key on https://www.myvocal.ai/profile after you have subscribed to Pro or Business Plan.
+</ParamField>
+
+### Body
+<ParamField path="id" type="string" required>
+  Your voiceId
+</ParamField>
+<ParamField body="callbackUrl" type="string" required>
+   To receive the audio returned after processing is completed.
+</ParamField>
+<ParamField body="files" type="Files" required>
+  <p>Please provide mp3/wav/m4a files.</p>
+  <p>A single file cannot exceed 10MB, and up to 25 files can be uploaded.</p>
+  <p>Please ensure that the total effective duration of the audio (including the parts with human voice, excluding the silent parts) is longer than 1 minute.</p>
+</ParamField>
+
+
+### Response
+
+<ResponseField name="code" type="number">
+  Indicates whether the call was successful. 1 if successful.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  When an exception occurs, specific exception information will be provided in the message.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+
+Includes specific data.
+
+<Expandable title="Toggle object">
+
+<ResponseField name="webhookId" type="string">
+   When the request is successfully sent, a webhoodId will be synchronously returned. The same information will also be called back in the callbackUrl, which is used to correlate the request and the response.
+</ResponseField>
+
+</Expandable>
+
+</ResponseField>
+
+<RequestExample>
+
+```bash Example Request
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/voices/vc/123' \
+--header 'accessKey: xxx' \
+--form 'files=@"xxx/xxx.mp3"' \
+--form 'callbackUrl="111"'
+```
+</RequestExample>
+
+<ResponseExample>
+
+```json  200（success）
+{
+    "code": 1,
+    "message": "Success",
+    "data": {
+        "webhookId": "1701406584rkzy91"
+    }
+}
+```
+```json  200（fail）
+{
+  "code": -1,
+  "message": "error msg",
+}
+```
+
+</ResponseExample>

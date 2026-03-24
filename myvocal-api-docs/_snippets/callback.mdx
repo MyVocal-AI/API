@@ -1,0 +1,61 @@
+﻿## About Callback
+
+Some API features are asynchronous because processing can take longer. In those cases, provide a callback URL in the request so the final result can be delivered reliably.
+
+### Request
+
+Provide a stable callback URL and keep it consistent across related scenarios. If the callback URL changes between requests, it can make correlation and result tracking harder.
+
+### Response
+
+When an async request is accepted, the API returns a `webhookId` immediately. The same `webhookId` is included in the callback payload so you can map callback results to the original request.
+
+<ResponseField name="webhookId" type="string">
+  Unique identifier returned synchronously and reused in callback payloads.
+</ResponseField>
+
+<ResponseField name="webhookType" type="string">
+  Event type.
+
+  <p><code>TRAIN_COVER_SPEAKER</code>: add an AI Cover voice</p>
+  <p><code>EDIT_COVER_SPEAKER</code>: improve an AI Cover voice</p>
+  <p><code>COVER_SONG</code>: create an AI Cover song</p>
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Callback status.
+
+  <p><code>SUCCESS</code></p>
+  <p><code>FAILURE</code></p>
+</ResponseField>
+
+<ResponseField name="summary" type="string">
+  Human-readable result summary.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Business payload for successful callbacks.
+</ResponseField>
+
+### Samples
+
+```json 200 Success
+{
+  "webhookId": "1700189306ffhdkejwcsk2",
+  "webhookType": "TRAIN_COVER_SPEAKER",
+  "status": "SUCCESS",
+  "summary": "Clone training success.",
+  "data": {
+    "id": "100"
+  }
+}
+```
+
+```json 200 Fail
+{
+  "webhookId": "1700189306ffhdkejwcsk2",
+  "webhookType": "TRAIN_COVER_SPEAKER",
+  "status": "FAILURE",
+  "summary": "Clone training failed."
+}
+```

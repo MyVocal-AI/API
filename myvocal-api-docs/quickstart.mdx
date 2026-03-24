@@ -1,0 +1,99 @@
+---
+title: "Quickstart"
+description: "Call MyVocal APIs end-to-end with default TTS path or myvocal_v3."
+---
+
+<Info>
+This quickstart uses production API host `https://api.myvocal.ai` and the `accessKey` request header.
+</Info>
+
+## Step 1: Get your API key
+
+1. Sign in to [MyVocal account](https://www.myvocal.ai/account).
+2. Subscribe to a plan that includes API access.
+3. Copy your API key from Account Info.
+
+## Step 2: Get your user info and voices
+
+Use these calls first to confirm your key is valid and to get a usable `voiceId`.
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/user/info' \
+--header 'accessKey: <your_api_key>'
+```
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/voices' \
+--header 'accessKey: <your_api_key>'
+```
+
+## Step 3: Create TTS with the default model path
+
+When `modelId` is omitted, the request uses the default model path.
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/tts' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{
+  "voiceId": "<voice_id>",
+  "title": "quickstart-default",
+  "text": "Hello from MyVocal API quickstart.",
+  "language": "en",
+  "voiceSettings": {
+    "stability": 0.7
+  }
+}'
+```
+
+## Step 4: Create TTS with `myvocal_v3`
+
+Set `modelId` to `myvocal_v3` to explicitly request V3.
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/tts' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{
+  "voiceId": "<voice_id>",
+  "title": "quickstart-v3",
+  "text": "Hello from MyVocal V3 model path.",
+  "language": "en",
+  "modelId": "myvocal_v3",
+  "voiceSettings": {
+    "stability": 0.5
+  }
+}'
+```
+
+<Warning>
+`myvocal_v3` is publicly documented. If your request returns `code = -1`, verify `voiceId`, `language`, account plan, and current backend availability before retrying.
+</Warning>
+
+## Step 5: Query history and output URL
+
+1. Query TTS list to get generated record IDs.
+2. Query URL endpoint with those IDs to get playable output URLs.
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/tts/list' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{
+  "pageNum": 1,
+  "pageSize": 10
+}'
+```
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/tts/query' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{
+  "ids": ["<tts_id>"]
+}'
+```
+
+<Card title="See full model details" icon="book" href="/api-reference/tts/models">
+  Open TTS Models & Migration for the current public model list and migration guidance.
+</Card>

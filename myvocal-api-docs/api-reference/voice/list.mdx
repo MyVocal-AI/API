@@ -1,0 +1,91 @@
+---
+title: "Get Voices"
+api: "GET https://api.myvocal.ai/sound_clone/api/v1/voices"
+description: "Return voices available to the current API key."
+---
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Response
+
+<ResponseField name="code" type="number" required>
+  `1` for success.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Backend message for success or failure context.
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Voice objects available under the current API key.
+  <Expandable title="Toggle object">
+    <ResponseField name="id" type="string">
+      Voice ID.
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      Voice display name.
+    </ResponseField>
+    <ResponseField name="type" type="string">
+      <div><b>cloned</b>: created from uploaded or recorded audio.</div>
+      <div><b>designed</b>: created with voice design.</div>
+    </ResponseField>
+    <ResponseField name="feature" type="string">
+      <code>text-to-speech</code> or <code>ai-cover</code>.
+    </ResponseField>
+    <ResponseField name="channel" type="string">
+      <code>web</code> or <code>api</code>.
+    </ResponseField>
+    <ResponseField name="fileCount" type="number">
+      Number of source files associated with the voice.
+    </ResponseField>
+    <ResponseField name="totalFileSize" type="number">
+      Total file size value reported by backend.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<Info>
+`GET /voices` does not return per-voice `supportedModels`. Do not rely on this endpoint alone to decide whether a voice is guaranteed to work with `myvocal_v3`.
+</Info>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/voices' \
+--header 'accessKey: <your_api_key>'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "Success",
+  "data": [
+    {
+      "id": "7789",
+      "name": "FirstClonedVoice",
+      "type": "cloned",
+      "feature": "text-to-speech",
+      "channel": "web",
+      "fileCount": 2,
+      "totalFileSize": 582944
+    }
+  ]
+}
+```
+
+```json 200 Fail
+{
+  "code": -1,
+  "message": "error msg"
+}
+```
+
+</ResponseExample>

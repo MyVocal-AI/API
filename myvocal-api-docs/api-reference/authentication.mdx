@@ -1,0 +1,38 @@
+---
+title: "Authentication"
+description: "Authenticate with MyVocal APIs using the accessKey header."
+---
+
+## How authentication works
+
+MyVocal API uses a single header for authentication on every endpoint:
+
+```http
+accessKey: <your_api_key>
+```
+
+## Where to get your API key
+
+1. Sign in to [MyVocal Account](https://www.myvocal.ai/account).
+2. Open Account Info.
+3. Copy your API key.
+
+## Header format
+
+<ParamField header="accessKey" type="string" required>
+  API key used to authenticate your request.
+</ParamField>
+
+## Security best practices
+
+- Keep API keys on your backend server.
+- Do not expose API keys in frontend code or mobile apps.
+- Do not commit API keys to Git repositories.
+- Rotate key immediately if you suspect leakage.
+
+## Example request
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/user/info' \
+--header 'accessKey: <your_api_key>'
+```

@@ -1,0 +1,122 @@
+---
+title: "Get TTS List"
+api: "GET https://api.myvocal.ai/sound_clone/api/v1/tts/list"
+description: "Return metadata about all your generated tts audio."
+---
+### Header
+<ParamField header="accessKey"   type="string" required>
+  You can copy your api-key on https://www.myvocal.ai/profile after you have subscribed to Pro or Business Plan.
+</ParamField>
+
+### Body
+<ParamField body="limit" type="number" default="10">
+<div>The number of TTS History queries at one time, supporting 10 ~ 1000 data queries at a time.</div>
+<div>If this parameter is empty, the default value is 10.</div>
+</ParamField>
+<ParamField body="startBeforeTTSId" type="string">
+<div>If this parameter is provided, we will start tracing back to earlier TTS History from this TTS item.</div>
+<div>If this parameter is empty, then we will default to tracing back directly from the most recent data.</div>
+</ParamField>
+
+### Response
+<ResponseField name="code" type="number" required>
+  Indicates whether the call was successful. 1 if successful.
+</ResponseField>
+
+<ResponseField name="message" type="string" >
+  When an exception occurs, specific exception information will be provided in the message.
+</ResponseField>
+
+<ResponseField name="data" type="object" >
+Includes specific data.
+    <Expandable title="Toggle object">
+      <ResponseField name="hasMore" type="boolean" >
+                <div>If there is no earlier created TTS item, then callback 1</div>
+                <div>If there are still earlier created TTS items, then callback 0</div>
+            </ResponseField>
+      <ResponseField name="earliestHistoryItemId" type="String" >
+                The earliest ttsid in this callback.
+        </ResponseField>
+        <ResponseField name="list" type="list">
+                The specific info of TTS history queried this time.
+            <Expandable title="Toggle object">
+            <ResponseField name="id" type="string" >
+                tts id
+            </ResponseField>
+            <ResponseField name="title" type="string" >
+                tts title
+            </ResponseField>
+            <ResponseField name="text" type="string" >
+            tts content
+            </ResponseField>
+            <ResponseField name="useChars" type="number" >
+            character count of this TTS item.
+            </ResponseField>
+            <ResponseField name="language" type="string" >
+            chosen language
+            </ResponseField>
+            <ResponseField name="channel" type="string" >
+            web or api
+            </ResponseField>
+            <ResponseField name="voiceId" type="string" >
+                The voiceid of the voice used to generate this TTS
+            </ResponseField>
+            <ResponseField name="voiceName" type="string" >
+                TThe voicename of the voice used to generate this TTS.
+            </ResponseField>
+            </Expandable>
+        </ResponseField>
+    </Expandable>
+</ResponseField>
+
+<RequestExample>
+
+```bash Example Request
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/tts/list' \
+--header 'accessKey: xxx'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json  200（success）
+{
+    "code": 1,
+    "message": "Success",
+    "data": {
+        "hasMore": true,
+        "earliestHistoryItemId": "2186",
+        "list": [
+            {
+                "voiceId": "7813",
+                "voiceName": "test",
+                "id": "2197",
+                "title": "female",
+                "text": "Generate a text-to-speech audio using a voice of your choice and returns audio stream.",
+                "useChars": 86,
+                "language": "en",
+                "channel": "api"
+            },
+            {
+                "voiceId": "7789",
+                "voiceName": "FirstClonedVoice",
+                "id": "2194",
+                "title": "female",
+                "text": "Generate a text-to-speech audio using a voice of your choice and returns audio stream.",
+                "useChars": 86,
+                "language": "en",
+                "channel": "api"
+            }
+        ]
+    }
+}
+```
+```json  200（fail）
+{
+  "code": -1,
+  "message": "error msg",
+}
+```
+
+</ResponseExample>

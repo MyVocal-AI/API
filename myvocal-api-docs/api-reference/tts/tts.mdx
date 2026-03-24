@@ -1,0 +1,169 @@
+﻿---
+title: "Text-to-Speech"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/tts"
+description: "Create text-to-speech audio and return complete audio stream."
+---
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Body
+
+<ParamField body="voiceId" type="string" required>
+  Voice ID returned by <code>GET /sound_clone/api/v1/voices</code>.
+</ParamField>
+
+<ParamField body="title" type="string">
+  Optional title for the generated record. If empty, backend uses a default title.
+</ParamField>
+
+<ParamField body="text" type="string" required>
+  Text to synthesize.
+</ParamField>
+
+<ParamField body="language" type="string">
+  Language selector.
+  <div>Default/V2 path: required and must use existing mapped language values.</div>
+  <div><code>myvocal_v3</code>: optional. If provided, it is forwarded to upstream as <code>language</code>. If omitted, upstream auto-detect is used.</div>
+  <div>See supported V3 codes in <a href="/api-reference/tts/v3-language-codes">V3 Language Codes</a> (98 languages).</div>
+</ParamField>
+
+<ParamField body="modelId" type="string">
+  Optional explicit model selector.
+  <div>Omit it to use the default model path.</div>
+  <div>Set <code>myvocal_v3</code> to request the V3 path.</div>
+</ParamField>
+
+<ParamField body="voiceSettings" type="object">
+  For advanced settings, use suggested values unless you have strong tuning needs.
+  <Expandable title="Toggle object">
+    <ParamField body="stability" type="number" default="0.7">
+      <div>a decimal between 0 and 1, in increments of 0.1, with a recommended default value of 0.7.</div>
+      <div>When your parameters are set lower, the emotional variation of the TTS audio will be more abundant. Even for the same text, the effects generated multiple times will be different. You can choose the most suitable one by generating the same text's TTS audio multiple times.</div>
+      <div>When your parameters are set higher, the emotion of the TTS audio will tend to be consistent.</div>
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<Warning>
+For <code>myvocal_v3</code>, the currently publicly documented stability values are:
+<div>- <code>0.5</code>: natural pronunciation, closer to normal human speech.</div>
+<div>- <code>1</code>: more stable output with less variation.</div>
+</Warning>
+
+### Prompt Control (myvocal_v3)
+
+<Info>
+Reference capability source: <a href="https://v3.myvocal.ai/" target="_blank">v3.myvocal.ai</a>. Use <code>[tag]</code> in text to guide style and delivery.
+</Info>
+
+Basic syntax:
+
+```text
+[tag] Your text content
+```
+
+Examples:
+
+```text
+[happy] Hello everyone, welcome to MyVocal.
+[laughter] That was funny.
+```
+
+Representative categories:
+
+- Emotion control: `happy`, `excited`, `sad`, `angry`, `surprised`
+- Non-speech sounds: `laughter`, `throat clearing`, `yawning`, `shushing`, `screaming`
+- Sound-related effects: `breathing`, `sighing`, `gasping`, `crying`, `murmuring`
+
+Open boundary note:
+
+> The listed tags are representative examples. The model can understand a broader set of sound and emotion prompts.
+
+### Response
+
+<ResponseField name="Content-Type" type="string">
+  Success usually returns <code>audio/mpeg</code>.
+</ResponseField>
+
+<ResponseField name="Body" type="stream">
+  Binary audio stream payload on success.
+</ResponseField>
+
+<RequestExample>
+
+```bash Default model path
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/tts' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{
+  "voiceId": "<voice_id>",
+  "title": "tts-default",
+  "text": "Hello from MyVocal default model path.",
+  "language": "en",
+  "voiceSettings": {
+    "stability": 0.7
+  }
+}' \
+--output output-default.mp3
+```
+
+```bash Explicit myvocal_v3 with language
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/tts' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{
+  "voiceId": "<voice_id>",
+  "title": "tts-v3-explicit-language",
+  "text": "[happy] Hola, this is a short V3 test.",
+  "language": "en",
+  "modelId": "myvocal_v3",
+  "voiceSettings": {
+    "stability": 0.5
+  }
+}' \
+--output output-v3-explicit.mp3
+```
+
+```bash Explicit myvocal_v3 with auto-detect (omit language)
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/tts' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{
+  "voiceId": "<voice_id>",
+  "title": "tts-v3-auto-detect",
+  "text": "[happy] Hola, este es un test para auto detect.",
+  "modelId": "myvocal_v3",
+  "voiceSettings": {
+    "stability": 0.5
+  }
+}' \
+--output output-v3-auto.mp3
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```text 200 Success
+audio/mpeg stream (binary)
+```
+
+```json 200 Fail
+{
+  "code": 10004,
+  "message": "Invalid language option.",
+  "data": null
+}
+```
+
+</ResponseExample>
+
+### Common errors
+
+- `Invalid language option.`: non-V3/default path is missing or using an unsupported `language` value.
+- `VOICE_NOT_FOUND`: `voiceId` is invalid or not available under this API key.
+- `code = -1`: upstream or backend failed to complete generation.

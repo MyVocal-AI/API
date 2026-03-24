@@ -1,0 +1,92 @@
+{
+    "$schema":  "https://mintlify.com/schema.json",
+    "name":  "MyVocal.AI",
+    "logo":  {
+                 "dark":  "/logo/dark.png",
+                 "light":  "/logo/light.svg"
+             },
+    "favicon":  "/favicon.svg",
+    "colors":  {
+                   "primary":  "#9563FF",
+                   "light":  "#AE87FF",
+                   "dark":  "#0D001D",
+                   "background":  {
+                                      "dark":  "#090014"
+                                  },
+                   "anchors":  {
+                                   "from":  "#FF7F57",
+                                   "to":  "#9563FF"
+                               }
+               },
+    "topbarCtaButton":  {
+                            "name":  "Home Page",
+                            "url":  "https://www.myvocal.ai"
+                        },
+    "anchors":  [
+                    {
+                        "name":  "API Reference",
+                        "icon":  "rectangle-terminal",
+                        "url":  "api-reference"
+                    }
+                ],
+    "navigation":  [
+                       {
+                           "group":  "",
+                           "pages":  [
+                                         "introduction",
+                                         "quickstart",
+                                         "api-reference/authentication",
+                                         "callback"
+                                     ]
+                       },
+                       {
+                           "group":  "Text-to-Speech",
+                           "pages":  [
+                                         "api-reference/tts/models",
+                                         "api-reference/tts/v3-language-codes",
+                                         "api-reference/tts/tts",
+                                         "api-reference/tts/ttsStream"
+                                     ]
+                       },
+                       {
+                           "group":  "Voice",
+                           "pages":  [
+                                         "api-reference/voice/addTTSVoice",
+                                         "api-reference/voice/editTTSVoice",
+                                         "api-reference/voice/designVoice",
+                                         "api-reference/voice/designVoiceSave",
+                                         "api-reference/voice/addCoverVoice",
+                                         "api-reference/voice/editCoverVoice",
+                                         "api-reference/voice/list",
+                                         "api-reference/voice/updateVoiceName",
+                                         "api-reference/voice/delete"
+                                     ]
+                       },
+                       {
+                           "group":  "AI Cover",
+                           "pages":  [
+                                         "api-reference/cover/cover"
+                                     ]
+                       },
+                       {
+                           "group":  "History",
+                           "pages":  [
+                                         "api-reference/history/ttsList",
+                                         "api-reference/history/ttsListUrl",
+                                         "api-reference/history/deleteTTS",
+                                         "api-reference/history/coverList",
+                                         "api-reference/history/coverListUrl",
+                                         "api-reference/history/deleteCover"
+                                     ]
+                       },
+                       {
+                           "group":  "User",
+                           "pages":  [
+                                         "api-reference/user/getInfo"
+                                     ]
+                       }
+                   ],
+    "footerSocials":  {
+                          "youtube":  "https://www.youtube.com/@myvocalai"
+                      }
+}

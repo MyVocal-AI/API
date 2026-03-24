@@ -1,0 +1,54 @@
+﻿---
+title: "TTS Models & Migration"
+description: "Public model IDs, language behavior, and V2 to V3 migration guidance."
+---
+
+<Info>
+Use this page as the source of truth for publicly documented TTS model IDs.
+</Info>
+
+## Model overview
+
+| Model ID | Recommended usage | Languages |
+| --- | --- | --- |
+| `myvocal_v3` | Explicit V3 request path | See the full list in [V3 Language Codes](/api-reference/tts/v3-language-codes). |
+| `english_v2` | V2 explicit English (original accent) | English (original accent). |
+| `spanish_es` | V2 explicit Spanish (ES) | Spanish (ES). |
+| `portuguese_pt` | V2 explicit Portuguese (PT) | Portuguese (PT). |
+| `multilingual_v2` | V2 shared multilingual path | French, German, Arabic, Japanese, and other mapped languages. |
+| `spanish_la` | V2 explicit Spanish (LA) | Spanish (LA). |
+| `portuguese_la` | V2 explicit Portuguese (LA) | Portuguese (LA). |
+
+## Public model ID list
+
+```text
+myvocal_v3
+english_v2
+spanish_es
+portuguese_pt
+multilingual_v2
+spanish_la
+portuguese_la
+```
+
+## V3 language scope
+
+- Supported language count: `98`
+- Excluded from support: `Kirghiz`, `Lingala`
+
+<Card title="Open V3 language code list" icon="list" href="/api-reference/tts/v3-language-codes">
+  View the complete supported language and code table.
+</Card>
+
+## Default path vs explicit `modelId`
+
+- <b>Default path</b>: omit `modelId` and follow current V2/default mapping rules.
+- <b>Explicit V3 path</b>: set `modelId` to `myvocal_v3`.
+
+## V2 to V3 migration guidance
+
+1. Keep your V2 flow as fallback.
+2. Add a feature flag for `modelId: "myvocal_v3"`.
+3. Use explicit `language` if you want deterministic target language output.
+4. Omit `language` for auto-detect behavior on V3.
+5. Roll out with traffic slices and monitor output quality.
