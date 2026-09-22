@@ -1,6 +1,6 @@
 ---
 title: "Quickstart"
-description: "Call MyVocal APIs end-to-end with default TTS path or myvocal_v3."
+description: "Call MyVocal APIs end-to-end with the default TTS path, myvocal_v3 or the Accent model."
 ---
 
 <Info>
@@ -70,20 +70,68 @@ curl --location 'https://api.myvocal.ai/sound_clone/api/v1/tts' \
 `myvocal_v3` is publicly documented. If your request returns `code = -1`, verify `voiceId`, `language`, account plan, and current backend availability before retrying.
 </Warning>
 
-## Step 5: Query history and output URL
+## Step 5: Discover Accent-compatible voices
+
+An Accent request must use a voice that is compatible with the Accent model. Ask for that list explicitly and
+pick a returned `id` as the `voiceId` for the next step.
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/voices?modelId=myvocal_v3_accent_enhance' \
+--header 'accessKey: <your_api_key>'
+```
+
+The list includes your own compatible voices plus the prebuilt voices available to your API key. It is a
+selection aid: a voice appearing in it is not a guarantee that a later generation will succeed.
+
+## Step 6: Create TTS with the Accent model
+
+Send the same request shape as the default path, with `modelId` set to `myvocal_v3_accent_enhance`. Use
+`--output` to save the returned audio to a file:
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/tts' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{
+  "voiceId": "<accent_voice_id>",
+  "title": "quickstart-accent",
+  "text": "Hello from the MyVocal Accent model.",
+  "modelId": "myvocal_v3_accent_enhance"
+}' \
+--output output-accent.mp3
+```
+
+- `language`: omit it, or send `auto`, to let the model detect the language. The Accent model accepts its own
+  list of 40 language codes plus `auto`; see [TTS Models &amp; Migration](/api-reference/tts/models). A plain V3
+  code the Accent model does not support (for example `hmn`) is rejected with `code = 10004`.
+- `voiceSettings.stability`: a value inside the legal range (`0.1` to `1`) is accepted for compatibility but
+  has no effect on this model. An out-of-range value is rejected with `code = 10006`.
+- Streaming: `POST /sound_clone/api/v1/tts/stream` takes the same body.
+
+Read `Content-Type` before trusting the body. On success the body is audio (`Content-Type: audio/mpeg`). When
+the request is rejected, or generation fails before any audio is sent, the service answers with HTTP `200` and
+a JSON envelope whose `code` is not a success code. **HTTP `200` alone does not mean the request succeeded.**
+If the connection is interrupted after audio has already started, the transfer simply ends rather than
+appending JSON, so treat a short file as a failed request.
+
+## Step 7: Query history and output URLs
 
 1. Query TTS list to get generated record IDs.
 2. Query URL endpoint with those IDs to get playable output URLs.
 
 ```bash
-curl --location 'https://api.myvocal.ai/sound_clone/api/v1/tts/list' \
---header 'accessKey: <your_api_key>' \
---header 'Content-Type: application/json' \
---data '{
-  "pageNum": 1,
-  "pageSize": 10
-}'
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/tts/list?limit=10' \
+--header 'accessKey: <your_api_key>'
 ```
+
+`GET /sound_clone/api/v1/tts/list` is a GET endpoint with two optional query parameters:
+
+- `limit`: `10` to `1000`, default `10`. A value outside that range is rejected with `code = 10027`.
+- `startBeforeTTSId`: cursor for older history. The row with that id is **included** in the page
+  (`id <= startBeforeTTSId`), so pass the id of the oldest row you already have to continue further back.
+  An id you cannot see is rejected with `code = 10019`.
+
+The response contains `list`, `hasMore` and `earliestHistoryItemId`.
 
 ```bash
 curl --location 'https://api.myvocal.ai/sound_clone/api/v1/tts/query' \

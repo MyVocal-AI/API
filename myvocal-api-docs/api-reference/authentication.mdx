@@ -36,3 +36,19 @@ accessKey: <your_api_key>
 curl --location 'https://api.myvocal.ai/sound_clone/api/v1/user/info' \
 --header 'accessKey: <your_api_key>'
 ```
+
+## Accent model requests
+
+The Accent model (`myvocal_v3_accent_enhance`) reuses everything on this page: the same `accessKey` header, the same API host and the same TTS endpoints. There is no separate key, scope or endpoint to request, and no extra header to send.
+
+<CardGroup cols={3}>
+  <Card title="Model selection" icon="layer-group" href="/api-reference/tts/models">
+    Public model IDs and how the default path, `myvocal_v3` and the Accent model differ.
+  </Card>
+  <Card title="Voice discovery" icon="microphone" href="/api-reference/voice/list">
+    Get a compatible `voiceId` with `modelId=myvocal_v3_accent_enhance`.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Authentication, voice discovery, synthesis and history in one flow.
+  </Card>
+</CardGroup>

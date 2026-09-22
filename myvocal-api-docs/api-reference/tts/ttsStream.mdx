@@ -14,6 +14,7 @@ description: "Create text-to-speech audio and return streaming audio response."
 
 <ParamField body="voiceId" type="string" required>
   Voice ID returned by <code>GET /sound_clone/api/v1/voices</code>.
+  <div>For <code>myvocal_v3_accent_enhance</code>, use a voice returned by <code>GET /sound_clone/api/v1/voices?modelId=myvocal_v3_accent_enhance</code>.</div>
 </ParamField>
 
 <ParamField body="title" type="string">
@@ -29,12 +30,15 @@ description: "Create text-to-speech audio and return streaming audio response."
   <div>Default/V2 path: required and must use existing mapped language values.</div>
   <div><code>myvocal_v3</code>: optional. If provided, it is forwarded to upstream as <code>language</code>. If omitted, upstream auto-detect is used.</div>
   <div>See supported V3 codes in <a href="/api-reference/tts/v3-language-codes">V3 Language Codes</a> (98 languages).</div>
+  <div><code>myvocal_v3_accent_enhance</code>: optional. Omit it (or send <code>auto</code>) for automatic detection. The Accent model has its own code set (40 language codes plus <code>auto</code>); see <a href="/api-reference/tts/models">TTS Models &amp; Migration</a>. A plain V3 code the Accent model does not support (for example <code>hmn</code>) is rejected with <code>code = 10004</code>. Legacy mapped enum values such as <code>US_ENGLISH</code> are not Accent codes; use <code>en</code>.</div>
 </ParamField>
 
 <ParamField body="modelId" type="string">
   Optional explicit model selector.
   <div>Omit it to use the default model path.</div>
   <div>Set <code>myvocal_v3</code> to request the V3 path.</div>
+  <div>Set <code>myvocal_v3_accent_enhance</code> to request the Accent model path.</div>
+  <div>When the Accent model is requested but its execution path is unavailable, the response is the standard generation error envelope (<code>code = 10003</code>). The request is never silently served by a different model.</div>
 </ParamField>
 
 <ParamField body="voiceSettings" type="object">
@@ -44,6 +48,7 @@ description: "Create text-to-speech audio and return streaming audio response."
       <div>a decimal between 0 and 1, in increments of 0.1, with a recommended default value of 0.7.</div>
       <div>When your parameters are set lower, the emotional variation of the TTS audio will be more abundant. Even for the same text, the effects generated multiple times will be different. You can choose the most suitable one by generating the same text's TTS audio multiple times.</div>
       <div>When your parameters are set higher, the emotion of the TTS audio will tend to be consistent.</div>
+      <div><b>Accent model note:</b> a value inside the normal legal range (<code>0.1</code> to <code>1</code>) is accepted for compatibility but has no effect on <code>myvocal_v3_accent_enhance</code>. An out-of-range value is still rejected with <code>code = 10006</code>.</div>
     </ParamField>
   </Expandable>
 </ParamField>
@@ -52,6 +57,10 @@ description: "Create text-to-speech audio and return streaming audio response."
 For <code>myvocal_v3</code>, the currently publicly documented stability values are:
 <div>- <code>0.5</code>: natural pronunciation, closer to normal human speech.</div>
 <div>- <code>1</code>: more stable output with less variation.</div>
+</Warning>
+
+<Warning>
+For <code>myvocal_v3_accent_enhance</code>, plain text is the supported minimal path. The inline <code>[tag]</code> prompt control documented for <code>myvocal_v3</code> is not documented as equivalent, and the service does not rewrite your text. Send plain text for the Accent model.
 </Warning>
 
 ### Prompt Control (myvocal_v3)
@@ -88,6 +97,15 @@ Representative categories:
 <ResponseField name="Body" type="stream">
   Binary audio stream payload.
 </ResponseField>
+
+<Info>
+An HTTP `200` does not by itself mean the request succeeded. Read `Content-Type` before trusting the body:
+
+- `audio/*` (normally `audio/mpeg`): the audio payload described above.
+- any JSON content type: the standard result envelope with a non-success `code` (see Common errors below).
+
+The two paths fail differently. Before any audio is sent, a rejected or failed request is answered with the JSON envelope above. After audio has started, the connection is terminated instead of appending a JSON body, because appending JSON to a partial audio body would corrupt it. Treat a short or interrupted download as a failed request, not as a complete audio file.
+</Info>
 
 <RequestExample>
 
@@ -140,6 +158,18 @@ curl --location 'https://api.myvocal.ai/sound_clone/api/v1/tts/stream' \
 --output output-v3-auto.mp3
 ```
 
+```bash Explicit myvocal_v3_accent_enhance
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/tts/stream' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{
+  "voiceId": "<accent_voice_id>",
+  "text": "Hello from the Accent model.",
+  "modelId": "myvocal_v3_accent_enhance"
+}' \
+--output output-accent.mp3
+```
+
 </RequestExample>
 
 <ResponseExample>
@@ -160,6 +190,8 @@ audio/mpeg stream (binary)
 
 ### Common errors
 
-- `Invalid language option.`: non-V3/default path is missing or using an unsupported `language` value.
-- `VOICE_NOT_FOUND`: `voiceId` is invalid or not available under this API key.
+- `Invalid language option.` (`code = 10004`): non-V3/default path is missing or using an unsupported `language` value; or the Accent model received a code outside its own language list.
+- `VOICE_NOT_FOUND` (`code = 10005`): `voiceId` is invalid or not available under this API key.
+- `Invalid stability option.` (`code = 10006`): `voiceSettings.stability` is outside the legal range.
+- `code = 10003`: the Accent model path was requested but its execution path is unavailable. The request is not silently served by another model.
 - `code = -1`: upstream or backend failed to complete generation.
