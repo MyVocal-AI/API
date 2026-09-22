@@ -45,7 +45,7 @@ description: "Create text-to-speech audio and return complete audio stream."
   For advanced settings, use suggested values unless you have strong tuning needs.
   <Expandable title="Toggle object">
     <ParamField body="stability" type="number" default="0.7">
-      <div>a decimal in the range <code>0.1</code> to <code>1</code> inclusive, with a recommended default value of <code>0.7</code>. Any value in that range is accepted; no fixed step is enforced.</div>
+      <div>a decimal in the range <code>0.1</code> to <code>1</code> inclusive, with a recommended default value of <code>0.7</code>. Values below <code>0.1</code> or above <code>1</code> are rejected; no fixed step is enforced.</div>
       <div>When your parameters are set lower, the emotional variation of the TTS audio will be more abundant. Even for the same text, the effects generated multiple times will be different. You can choose the most suitable one by generating the same text's TTS audio multiple times.</div>
       <div>When your parameters are set higher, the emotion of the TTS audio will tend to be consistent.</div>
       <div><b>Accent model note:</b> a value inside the normal legal range (<code>0.1</code> to <code>1</code>) is accepted for compatibility but has no effect on <code>myvocal_v3_accent_enhance</code>. An out-of-range value is still rejected with <code>code = 10006</code>.</div>
