@@ -10,6 +10,15 @@ description: "Return voices available to the current API key."
   API key for authentication.
 </ParamField>
 
+### Query
+
+<ParamField query="modelId" type="string">
+  Optional model filter.
+  <div>Omit it to keep the current unfiltered response.</div>
+  <div>Set it to <code>myvocal_v3_accent_enhance</code> to return the voices compatible with the Accent model: your own compatible voices plus the prebuilt voices available to your API key.</div>
+  <div>The filtered list is a selection aid. A voice appearing in it is not a guarantee that a later generation will succeed, and the generation call checks the current state again.</div>
+</ParamField>
+
 ### Response
 
 <ResponseField name="code" type="number" required>
@@ -52,10 +61,19 @@ description: "Return voices available to the current API key."
 `GET /voices` does not return per-voice `supportedModels`. Do not rely on this endpoint alone to decide whether a voice is guaranteed to work with `myvocal_v3`.
 </Info>
 
+<Info>
+`GET /voices` does not return per-voice `supportedModels`. Do not rely on this endpoint alone to decide whether a voice is guaranteed to work with `myvocal_v3_accent_enhance` either; the same limitation applies to the Accent-filtered list.
+</Info>
+
 <RequestExample>
 
 ```bash
 curl --location 'https://api.myvocal.ai/sound_clone/api/v1/voices' \
+--header 'accessKey: <your_api_key>'
+```
+
+```bash Accent-compatible voices
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/voices?modelId=myvocal_v3_accent_enhance' \
 --header 'accessKey: <your_api_key>'
 ```
 

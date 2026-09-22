@@ -12,6 +12,7 @@ Use this page as the source of truth for publicly documented TTS model IDs.
 | Model ID | Recommended usage | Languages |
 | --- | --- | --- |
 | `myvocal_v3` | Explicit V3 request path | See the full list in [V3 Language Codes](/api-reference/tts/v3-language-codes). |
+| `myvocal_v3_accent_enhance` | Explicit Accent request path | 40 language codes plus `auto`. See the Accent model section below. |
 | `english_v2` | V2 explicit English (original accent) | English (original accent). |
 | `spanish_es` | V2 explicit Spanish (ES) | Spanish (ES). |
 | `portuguese_pt` | V2 explicit Portuguese (PT) | Portuguese (PT). |
@@ -23,6 +24,7 @@ Use this page as the source of truth for publicly documented TTS model IDs.
 
 ```text
 myvocal_v3
+myvocal_v3_accent_enhance
 english_v2
 spanish_es
 portuguese_pt
@@ -40,10 +42,78 @@ portuguese_la
   View the complete supported language and code table.
 </Card>
 
+## Accent model (`myvocal_v3_accent_enhance`)
+
+The Accent model has its own language contract. It is not the same set as `myvocal_v3`.
+
+- Supported language count: `40` language codes, plus `auto`.
+- Omitting `language` is equivalent to `auto`.
+- A code outside this list is rejected with `code = 10004`. This includes plain V3 codes the Accent model does not
+  support, such as `hmn`.
+- Legacy mapped enum values (for example `US_ENGLISH`) are not Accent codes. Use `en`.
+
+Accepted Accent language codes:
+
+```text
+auto
+zh
+yue
+en
+ar
+ru
+es
+fr
+pt
+de
+tr
+nl
+uk
+vi
+id
+ja
+it
+ko
+th
+pl
+ro
+el
+cs
+fi
+hi
+bg
+da
+he
+ms
+fa
+sk
+sv
+hr
+fil
+hu
+no
+sl
+ca
+nn
+ta
+af
+```
+
+Other Accent behavior:
+
+- Voices: use the compatible voices returned by `GET /sound_clone/api/v1/voices?modelId=myvocal_v3_accent_enhance`.
+  That list includes your own compatible voices and the prebuilt voices available to your API key. A voice listed
+  there is a selection aid, not a guarantee that a later generation will succeed.
+- `voiceSettings.stability`: a value inside the legal range (`0.1` to `1`) is accepted for compatibility but has no
+  effect on this model. Out-of-range values are still rejected with `code = 10006`.
+- Prompt tags: inline `[tag]` prompt control is documented for `myvocal_v3`. It is not documented as equivalent for
+  the Accent model; send plain text.
+- Character metering, plan limits and rates stay the same as the other TTS models.
+
 ## Default path vs explicit `modelId`
 
 - <b>Default path</b>: omit `modelId` and follow current V2/default mapping rules.
 - <b>Explicit V3 path</b>: set `modelId` to `myvocal_v3`.
+- <b>Explicit Accent path</b>: set `modelId` to `myvocal_v3_accent_enhance`.
 
 ## V2 to V3 migration guidance
 
@@ -52,3 +122,17 @@ portuguese_la
 3. Use explicit `language` if you want deterministic target language output.
 4. Omit `language` for auto-detect behavior on V3.
 5. Roll out with traffic slices and monitor output quality.
+
+## Migration to the Accent model
+
+The table describes what changes when you move from the default/V2 path or from `myvocal_v3` to
+`myvocal_v3_accent_enhance`.
+
+| Your current request | What to change |
+| --- | --- |
+| Compatible voice + plain text + a language the Accent model supports | Change only `modelId` to `myvocal_v3_accent_enhance`. |
+| `language` omitted or `auto` | No change; both mean automatic detection. |
+| Legacy mapped language enum such as `US_ENGLISH` | Replace with the Accent code `en`. |
+| Plain V3-only code not in the Accent list (for example `hmn`) | Choose a supported Accent code and re-test, or keep using `myvocal_v3`. |
+| Inline `[tag]` prompt control | Send plain text for the Accent model, or keep using `myvocal_v3`. |
+| A voice that the Accent voice list does not return | Keep using the model you use today for that voice. |
