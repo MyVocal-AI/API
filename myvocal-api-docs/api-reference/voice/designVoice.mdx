@@ -1,80 +1,16 @@
 ---
-title: "Design Voice for TTS_Generate"
-api: "POST https://docs.myvocal.ai/sound_clone/api/v1/voices/design"
-description: "Create a new voice without any audio files.(❗❗❗File-related interfaces are not supported, please use interface tools for requests.)"
+title: "Voice Design (temporarily unavailable)"
+description: "The voice design API is temporarily unavailable."
 ---
 
-### Header
-<ParamField header="accessKey"   type="string" required>
-  You can copy your api-key on https://www.myvocal.ai/profile after you have subscribed to Pro or Business Plan.
-</ParamField>
+<Warning>
+The voice design API is **temporarily unavailable**. This endpoint cannot be called at this time.
+</Warning>
 
-### Body
-<ParamField body="text" type="string" required>
-  Please provide a piece of English content that is no less than 100 characters and no more than 500 characters for the purpose of generating a trial audio.
-</ParamField>
-<ParamField body="gender" type="string" required>
-<div><b>male</b></div>
-<div><b>female</b></div>
-</ParamField>
+- There is no supported request or response contract for this feature while it is withdrawn, so do not build an integration against it.
+- A call to this endpoint does not return a designed voice. It answers with the standard JSON envelope and `code` `10029` (`The voice design API is temporarily unavailable.`).
+- The previous request fields, response headers and examples have been removed from this page so that a stale link cannot be mistaken for the current contract.
 
-<ParamField body="accent" type="string" required>
-<div><b>american</b></div>
-<div><b>british</b></div>
-<div><b>african</b></div>
-<div><b>australian</b></div>
-<div><b>indian</b></div>
-</ParamField>
+A voice you already created remains fully available: it is still returned by [List Voices](/api-reference/voice/list) and still works with Text-to-Speech.
 
-<ParamField body="age" type="string" required>
-<div><b>middle_aged</b></div>
-<div><b>young</b></div>
-<div><b>old</b></div>
-
-</ParamField>
-<ParamField body="accentStrength" type="string" required>
-  The parameter requirement is a decimal between 0 and 2, with increments of 0.1.
-</ParamField>
-
-
-### Response
-### Header
-<ResponseField name="Content-Type"  type="string" >
-    If the request is successful, this value in the callback is <b>audio/mpeg</b>.
-</ResponseField>
-This response is stream.
-<ResponseField name="designId"   type="string" >
-    The designId included in the callback when you use Design Voice for TTS_Generate
-</ResponseField>
-### Body
-
-
-<RequestExample>
-
-```bash Example Request
-curl --location 'https://uat.myvocal.ai/sound_clone/api/v1/voices/design' \
---header 'accessKey: xxx' \
---header 'Content-Type: application/json' \
---data '{
-	"text": "The client interacts with users through mobile devices, while the server is responsible for data  in",
-	"gender": "female",
-	"accent": "indian",
-	"age": "old",
-	"accentStrength": 1.4
-}'
-```
-</RequestExample>
-
-<ResponseExample>
-
-```json  200（success）
-This response is stream.
-```
-```json  200（fail）
-{
-  "code": -1,
-  "message": "error msg",
-}
-```
-
-</ResponseExample>
+To add a new voice, use [Add TTS Voice](/api-reference/voice/addTTSVoice) or [Add Cover Voice](/api-reference/voice/addCoverVoice) instead.
