@@ -35,7 +35,7 @@ Read this endpoint first. It publishes the language keys you may request, the ac
 </ResponseField>
 
 <ResponseField name="languages" type="array">
-  The language entries: `{ code, name, sourceSupport, ... }`. Use these keys as `targetLanguages` and `sourceLanguage`.
+  The language entries: `{ languageKey, displayName, sourceSupport }`. Use `languageKey` as `targetLanguages` and `sourceLanguage`.
 </ResponseField>
 
 <ResponseField name="audioFormats" type="array">
@@ -64,6 +64,9 @@ Read this endpoint first. It publishes the language keys you may request, the ac
 
 <ResponseField name="account" type="object">
   `{ planKey, accessState, entitlementVersion, charactersPerMinutePerLanguage, availableCharacters, balanceState }`. `availableCharacters` is a **string** or `null`.
+
+  - `accessState` is one of `ENABLED`, `FREE_LOCKED`, `ENTERPRISE_UNRESOLVED`, `SYNCING` or `UNRESOLVED`. Only `ENABLED` may generate.
+  - `balanceState` is either `AVAILABLE` or `LEDGER_UNAVAILABLE`, and it describes **this** account field only. When the shared ledger read is unavailable, `availableCharacters` is `null` and `balanceState` is `LEDGER_UNAVAILABLE` instead of a guessed number.
 </ResponseField>
 
 <ResponseField name="stageAvailability" type="object">
@@ -91,7 +94,7 @@ curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/capabi
     "languageCatalogVersion": "1",
     "languageCatalogState": "CONFIGURED",
     "formatCatalogVersion": "1",
-    "languages": [ { "code": "es", "name": "Spanish" }, { "code": "fr", "name": "French" } ],
+    "languages": [ { "languageKey": "es", "displayName": "Spanish", "sourceSupport": "UNVERIFIED" }, { "languageKey": "fr", "displayName": "French", "sourceSupport": "UNVERIFIED" } ],
     "audioFormats": ["mp3", "wav", "m4a", "aac", "flac", "aiff", "ogg", "oga", "opus", "weba"],
     "videoFormats": ["mp4", "mov", "m4v", "mkv", "avi", "webm", "wmv", "mpeg", "mpg", "3gpp"],
     "exportFormats": ["mp3", "wav", "flac", "mp4"],
@@ -100,11 +103,11 @@ curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/capabi
     "quoteTtlSeconds": 600,
     "account": {
       "planKey": "PRO",
-      "accessState": "AVAILABLE",
+      "accessState": "ENABLED",
       "entitlementVersion": "1",
       "charactersPerMinutePerLanguage": 4000,
       "availableCharacters": "10500",
-      "balanceState": "OK"
+      "balanceState": "AVAILABLE"
     },
     "stageAvailability": { "project": "AVAILABLE", "upload": "AVAILABLE", "export": "AVAILABLE" },
     "requestId": "..."

@@ -36,7 +36,8 @@ Read the accepted formats and limits from the service instead of hard-coding the
 - `videoFormats` — accepted video containers/extensions.
 - `exportFormats` — `mp3`, `wav`, `flac`, `mp4`. `mp4` is the composed video and only applies to a video source.
 - `maxSourceBytes` — the maximum declared upload size (a JSON **string**).
-- `languages[]` — the language keys you may request, together with `sourceSupport`.
+- `languages[]` — the language entries you may request, each shaped `{ languageKey, displayName, sourceSupport }`. Send **`languageKey`** (for example `es`), not `displayName`.
+- `sourceSupport` — source-transcription evidence for that key, one of `CONFIRMED_ALIAS`, `CONFIRMED_NATIVE`, `REJECTED` or `UNVERIFIED`. It is separate from whether the key is a valid target language.
 - `languageCatalogState` — `CONFIGURED` when an authoritative list is configured.
 
 Share the same production limits note: the concrete production values are the ones the service returns at request time. Audio and video sources are both supported; a successful audio-source run does not by itself prove that every video container has been exercised end to end.
@@ -48,7 +49,7 @@ curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/capabi
 --header 'accessKey: <your_api_key>'
 ```
 
-Look at `account.accessState`, `planRates`, `account.charactersPerMinutePerLanguage`, `quoteTtlSeconds` and the language/format lists. If `languageCatalogState` is `EMPTY`, quoting is not available for any language yet.
+Look at `account.accessState`, `planRates`, `account.charactersPerMinutePerLanguage`, `quoteTtlSeconds` and the language/format lists. If `languageCatalogState` is `EMPTY`, quoting is not available for any language yet. `accessState` is `ENABLED` only when generation is allowed; `FREE_LOCKED`, `ENTERPRISE_UNRESOLVED`, `SYNCING` and `UNRESOLVED` each mean generation is not currently available, for different reasons.
 
 ## Step 2: Create the project
 
@@ -286,7 +287,7 @@ curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/assets
 --header 'accessKey: <your_api_key>'
 ```
 
-The response contains `state`, `mimeType`, a temporary `url`, `expiresAt` and `renewalAttemptLimit`. Request it when you need it; when it has expired, request a new one instead of caching it.
+The response contains `state`, `mimeType`, a temporary `url`, `expiresAt` and `renewalAttemptLimit` (currently `1`: one renewal is allowed, then the authorization error must be surfaced). Request it when you need it; when it has expired, request a new one instead of caching it.
 
 ## Step 13: Export a file
 

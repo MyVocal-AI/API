@@ -15,7 +15,7 @@ Read this endpoint first. It tells you what the account may do and which enum va
 ### Response
 
 <ResponseField name="accessState" type="string">
-  Whether this account may use Text-to-Music.
+  Whether this account may use Text-to-Music: `ENABLED` or `DISABLED`. `DISABLED` means generation is not available for the account.
 </ResponseField>
 
 <ResponseField name="planKey" type="string">
@@ -78,7 +78,7 @@ curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/capabilities' \
   "code": 1,
   "message": "success",
   "data": {
-    "accessState": "AVAILABLE",
+    "accessState": "ENABLED",
     "planKey": "PRO",
     "ratePerMinute": 1920,
     "rateVersion": "music-2026-08-26-v1",

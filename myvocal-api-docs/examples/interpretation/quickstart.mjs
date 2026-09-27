@@ -13,9 +13,15 @@
  *   MYVOCAL_EXPORT_FORMAT     optional, defaults to "wav"
  *   MYVOCAL_OUTPUT_DIR        optional, defaults to the current directory
  *   MYVOCAL_MAX_WAIT_SECONDS  optional, defaults to 1800
+ *   MYVOCAL_REQUEST_TIMEOUT   optional per-request timeout in seconds, defaults to 30
  *
- * Safety: running this against the production host performs REAL, BILLABLE work.
- * The presigned part URLs point at object storage: the accessKey is never sent to them.
+ * Recovery: identifiers, part ETags and idempotency keys are written to the state
+ * file before each create/generate request is sent, so a lost response or a restart
+ * resumes the same operation. A completed upload is never re-signed or re-uploaded,
+ * and an accepted generation is never re-priced or resubmitted.
+ *
+ * Exit codes: 0 = media produced; 1 = API/domain error; 2 = bounded wait expired;
+ * 3 = finished without usable media. The accessKey is never sent to storage URLs.
  */
 
 import { randomBytes, randomInt } from "node:crypto";
@@ -27,6 +33,16 @@ const INTERP = "/sound_clone/api/v1/interpretation";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_MEDIA = join(HERE, "..", "_stub", "fixtures", "sample_source.wav");
 
+const EXIT_OK = 0, EXIT_API_ERROR = 1, EXIT_TIMEOUT = 2, EXIT_NO_MEDIA = 3;
+
+/** Content types accepted per export format, and the signature each container starts with. */
+const EXPECTED_CONTENT_TYPES = {
+  wav: ["audio/wav", "audio/x-wav", "audio/wave"],
+  mp3: ["audio/mpeg", "audio/mp3"],
+  flac: ["audio/flac", "audio/x-flac"],
+  mp4: ["video/mp4", "audio/mp4"],
+};
+
 class ApiError extends Error {
   constructor(code, message, details, httpStatus) {
     super(`MyVocal error code=${code} message=${message}`);
@@ -36,6 +52,14 @@ class ApiError extends Error {
     this.httpStatus = httpStatus;
   }
 }
+
+class TimeoutFailure extends Error {}
+
+class MediaUnavailable extends Error {}
+
+const asBigInt = (value) => (value === null || value === undefined ? null : BigInt(value));
+const isJson = (contentType) => (contentType ?? "").toLowerCase().includes("json");
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 class Config {
   constructor() {
@@ -47,8 +71,9 @@ class Config {
     this.exportFormat = process.env.MYVOCAL_EXPORT_FORMAT ?? "wav";
     this.outputDir = process.env.MYVOCAL_OUTPUT_DIR ?? ".";
     this.maxWaitSeconds = Number(process.env.MYVOCAL_MAX_WAIT_SECONDS ?? "1800");
-    if (!this.apiKey) exitWith("MYVOCAL_API_KEY is required", 1);
-    if (!existsSync(this.mediaFile)) exitWith(`MYVOCAL_MEDIA_FILE does not exist: ${this.mediaFile}`, 1);
+    this.requestTimeoutMs = Number(process.env.MYVOCAL_REQUEST_TIMEOUT ?? "30") * 1000;
+    if (!this.apiKey) fail("MYVOCAL_API_KEY is required", EXIT_API_ERROR);
+    if (!existsSync(this.mediaFile)) fail(`MYVOCAL_MEDIA_FILE does not exist: ${this.mediaFile}`, EXIT_API_ERROR);
     mkdirSync(this.outputDir, { recursive: true });
   }
 
@@ -57,38 +82,43 @@ class Config {
   }
 }
 
-function exitWith(message, code) {
+function fail(message, code) {
   console.error(message);
   process.exit(code);
 }
 
-/** 16-64 printable ASCII characters, unique per operation. */
 const newIdempotencyKey = () => randomBytes(24).toString("hex").slice(0, 32);
-
-/** Characters arrive as strings; parse with BigInt before comparing. */
-const asBigInt = (value) => (value === null || value === undefined ? null : BigInt(value));
-
-const isJson = (contentType) => (contentType ?? "").toLowerCase().includes("json");
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 class Client {
   constructor(config) {
     this.config = config;
   }
 
-  /** One API request. Checks the HTTP status *and* the JSON business code. */
+  async #send(url, options, what) {
+    try {
+      return await fetch(url, { ...options, signal: AbortSignal.timeout(this.config.requestTimeoutMs) });
+    } catch (failure) {
+      throw new ApiError(-1, `${what} failed: ${failure.message}`, null, null);
+    }
+  }
+
+  /** Success needs BOTH a 2xx status and JSON code == 1. */
   async call(method, path, body, idempotencyKey) {
     const headers = { accessKey: this.config.apiKey, Accept: "application/json" };
     if (body !== undefined) headers["Content-Type"] = "application/json";
     if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
 
-    const response = await fetch(this.config.baseUrl + path, {
+    const response = await this.#send(this.config.baseUrl + path, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    }, `request ${method} ${path}`);
     const contentType = response.headers.get("content-type");
     const raw = await response.text();
+
+    if (!(response.status >= 200 && response.status < 300)) {
+      throw new ApiError(-1, `HTTP ${response.status} for ${method} ${path}`, null, response.status);
+    }
     if (!isJson(contentType)) {
       throw new ApiError(-1, `expected JSON but received ${contentType ?? "no content type"} (HTTP ${response.status})`, null, response.status);
     }
@@ -101,30 +131,64 @@ class Client {
   async uploadPart(url, payload, requiredHeaders) {
     const headers = { ...(requiredHeaders ?? {}) };
     headers["Content-Length"] ??= String(payload.length);
-    const response = await fetch(url, { method: "PUT", headers, body: payload });
-    if (!response.ok) throw new ApiError(-1, `part upload failed with HTTP ${response.status}`, null, response.status);
+    const response = await this.#send(url, { method: "PUT", headers, body: payload }, "part upload");
+    if (!(response.status >= 200 && response.status < 300)) {
+      throw new ApiError(-1, `part upload failed with HTTP ${response.status}`, null, response.status);
+    }
     const etag = response.headers.get("etag");
     if (!etag) throw new ApiError(-1, "storage did not return an ETag for the part");
     return etag;
   }
 
-  async fetchBytes(url) {
-    const response = await fetch(url);
-    if (!response.ok) throw new ApiError(-1, `download failed with HTTP ${response.status}`, null, response.status);
-    return { contentType: response.headers.get("content-type") ?? "", payload: Buffer.from(await response.arrayBuffer()) };
+  /**
+   * Fetch media bytes and refuse anything that is not the requested media. HTML error
+   * pages, JSON envelopes, empty bodies and wrong-signature payloads are failures.
+   */
+  async fetchMedia(url, exportFormat) {
+    const response = await this.#send(url, { method: "GET" }, "media download");
+    const contentType = (response.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+    const payload = Buffer.from(await response.arrayBuffer());
+
+    if (!(response.status >= 200 && response.status < 300)) throw new MediaUnavailable(`HTTP ${response.status}`);
+    if (isJson(contentType) || contentType.startsWith("text/")) {
+      throw new ApiError(-1, `refusing to store a ${contentType || "unknown"} response as media`);
+    }
+    const allowed = EXPECTED_CONTENT_TYPES[exportFormat] ?? [];
+    if (allowed.length && !allowed.includes(contentType)) {
+      throw new ApiError(-1, `unexpected content type ${contentType} for ${exportFormat}`);
+    }
+    if (payload.length === 0) throw new ApiError(-1, "media body was empty");
+    if (!looksLikeMedia(payload, exportFormat)) {
+      throw new ApiError(-1, `payload does not start with a ${exportFormat} signature`);
+    }
+    return { contentType, payload };
+  }
+}
+
+function looksLikeMedia(payload, exportFormat) {
+  const head = payload.subarray(0, 16);
+  switch (exportFormat) {
+    case "wav":
+      return head.subarray(0, 4).toString("latin1") === "RIFF";
+    case "mp3":
+      return head.subarray(0, 3).toString("latin1") === "ID3"
+        || (head.length > 1 && head[0] === 0xff && (head[1] & 0xe0) === 0xe0);
+    case "flac":
+      return head.subarray(0, 4).toString("latin1") === "fLaC";
+    case "mp4":
+      return head.length >= 8 && head.subarray(4, 8).toString("latin1") === "ftyp";
+    default:
+      return true;
   }
 }
 
 /** `nextPollAfterMs` is currently null, so a bounded jittered wait is used. */
 function jitteredDelay(nextPollAfterMs) {
-  if (nextPollAfterMs !== null && nextPollAfterMs !== undefined) {
-    return Math.max(500, Number(nextPollAfterMs));
-  }
+  if (nextPollAfterMs !== null && nextPollAfterMs !== undefined) return Math.max(500, Number(nextPollAfterMs));
   return 2000 + randomInt(0, 3000);
 }
 
 const loadState = (config) => (existsSync(config.statePath) ? JSON.parse(readFileSync(config.statePath, "utf8")) : {});
-/** Persist ids and idempotency keys only — never keys, URLs or media. */
 const saveState = (config, state) => writeFileSync(config.statePath, JSON.stringify(state, null, 2));
 
 async function main() {
@@ -136,27 +200,40 @@ async function main() {
 
   console.log("[1/9] capabilities");
   const capabilities = await client.call("GET", `${INTERP}/capabilities`);
-  const available = (capabilities.languages ?? []).map((entry) => entry.code);
+  // Real DTO field names: languageKey / displayName / sourceSupport.
+  const available = (capabilities.languages ?? []).map((entry) => entry.languageKey);
   const exportFormats = capabilities.exportFormats ?? [];
-  console.log(`  rate=${capabilities.account?.charactersPerMinutePerLanguage} per language, exportFormats=${exportFormats}`);
-  if (capabilities.languageCatalogState !== "CONFIGURED") {
-    exitWith(`the language catalog is ${capabilities.languageCatalogState}; quoting is unavailable`, 1);
-  }
-  const targets = config.targetLanguages.filter((code) => available.includes(code));
-  const selected = targets.length ? targets : available.slice(0, 1);
-  if (!selected.length) exitWith("no target language from capabilities.languages is selectable", 1);
+  const account = capabilities.account ?? {};
+  console.log(`  accessState=${account.accessState} balanceState=${account.balanceState} rate=${account.charactersPerMinutePerLanguage} per language, exportFormats=${exportFormats}`);
+  if (capabilities.languageCatalogState !== "CONFIGURED") fail(`the language catalog is ${capabilities.languageCatalogState}; quoting is unavailable`, EXIT_API_ERROR);
+  if (account.accessState !== "ENABLED") fail(`account accessState is ${account.accessState}; generation is not available`, EXIT_API_ERROR);
+  const selected = config.targetLanguages.filter((code) => available.includes(code));
+  const targets = selected.length ? selected : available.slice(0, 1);
+  if (!targets.length) fail("no target language from capabilities.languages is selectable", EXIT_API_ERROR);
   if (!exportFormats.includes(config.exportFormat)) {
-    exitWith(`MYVOCAL_EXPORT_FORMAT=${config.exportFormat} is not one of ${exportFormats}`, 1);
+    fail(`MYVOCAL_EXPORT_FORMAT=${config.exportFormat} is not one of ${exportFormats}`, EXIT_API_ERROR);
+  }
+  if (state.projectId && state.targetLanguages && JSON.stringify(state.targetLanguages) !== JSON.stringify(targets)) {
+    fail(`the saved state was created for ${state.targetLanguages} but this run selected ${targets}; use a fresh MYVOCAL_OUTPUT_DIR or the same languages`, EXIT_API_ERROR);
   }
 
   if (!state.projectId) {
     console.log("[2/9] create project");
+    // Persist the key and the request binding BEFORE sending.
+    const requestBody = { name: "Quickstart dubbing", targetLanguages: targets };
     state.createKey ??= newIdempotencyKey();
-    const created = await client.call("POST", `${INTERP}/projects`,
-      { name: "Quickstart dubbing", targetLanguages: selected }, state.createKey);
+    state.createBody = requestBody;
+    state.targetLanguages = targets;
+    saveState(config, state);
+    const created = await client.call("POST", `${INTERP}/projects`, requestBody, state.createKey);
     state.projectId = created.projectId;
     saveState(config, state);
     console.log(`  projectId=${state.projectId} state=${created.state} settingsVersion=${created.settingsVersion}`);
+  } else if (state.createKey && !state.completed) {
+    // A previous attempt may have been accepted without a response reaching us: resend
+    // the SAME key and body (the documented replay), never a new project.
+    const replayed = await client.call("POST", `${INTERP}/projects`, state.createBody, state.createKey);
+    if (replayed.projectId !== state.projectId) fail("server returned a different projectId for the same idempotency key", EXIT_API_ERROR);
   }
 
   const projectId = state.projectId;
@@ -175,23 +252,34 @@ async function main() {
   }
 
   console.log("[4/9] sign, upload and collect ETags for every part");
-  const completedParts = [];
-  for (let partNumber = 1; partNumber <= state.totalParts; partNumber += 1) {
-    const chunk = media.subarray((partNumber - 1) * state.partSizeBytes, partNumber * state.partSizeBytes);
-    const signed = await client.call("POST", `${INTERP}/uploads/${state.uploadId}/parts`, { partNumber });
-    const etag = await client.uploadPart(signed.url, chunk, signed.requiredHeaders);
-    completedParts.push({ partNumber, etag });
-    console.log(`  part ${partNumber}/${state.totalParts} -> ${etag.slice(0, 12)}`);
+  if (state.uploadState === "READY" || state.completed) {
+    // Signing is only allowed while the session is CREATED/UPLOADING: skip it.
+    console.log("  upload is already complete; skipping part signing and upload");
+  } else {
+    const completedParts = state.completedParts ?? [];
+    const signedNumbers = new Set(completedParts.map((part) => part.partNumber));
+    for (let partNumber = 1; partNumber <= state.totalParts; partNumber += 1) {
+      if (signedNumbers.has(partNumber)) continue;
+      const chunk = media.subarray((partNumber - 1) * state.partSizeBytes, partNumber * state.partSizeBytes);
+      const signed = await client.call("POST", `${INTERP}/uploads/${state.uploadId}/parts`, { partNumber });
+      const etag = await client.uploadPart(signed.url, chunk, signed.requiredHeaders);
+      completedParts.push({ partNumber, etag });
+      state.completedParts = completedParts;
+      saveState(config, state);
+      console.log(`  part ${partNumber}/${state.totalParts} -> ${etag.slice(0, 12)}`);
+    }
   }
 
   console.log("[5/9] complete the upload and wait for the probe");
   if (!state.completed) {
-    await client.call("POST", `${INTERP}/uploads/${state.uploadId}/complete`, { parts: completedParts });
+    await client.call("POST", `${INTERP}/uploads/${state.uploadId}/complete`, { parts: state.completedParts ?? [] });
     state.completed = true;
     saveState(config, state);
   }
   for (;;) {
     const status = await client.call("GET", `${INTERP}/uploads/${state.uploadId}`);
+    state.uploadState = status.state;
+    saveState(config, state);
     if (status.state === "READY") {
       console.log(`  upload state -> READY (media=${status.media?.inputFormat})`);
       break;
@@ -200,35 +288,45 @@ async function main() {
       throw new ApiError(status.errorCode ?? -1, `upload ended in state ${status.state}`);
     }
     if (Date.now() > deadline) {
-      throw new Error(`upload ${state.uploadId} did not reach READY; keep the id and poll again later`);
+      throw new TimeoutFailure(`upload ${state.uploadId} did not reach READY; keep the id and poll again later`);
     }
     console.log(`  upload state -> ${status.state}`);
     await sleep(jitteredDelay(null));
   }
 
   console.log("[6/9] quote");
-  const quote = await client.call("POST", `${INTERP}/projects/${projectId}/quotes`,
-    { settingsVersion: null, targetLanguages: selected });
-  if (quote.state === "ALL_TARGETS_EXIST") {
-    console.log(`  state=ALL_TARGETS_EXIST quoteId=${quote.quoteId} totalCharacters=${quote.totalCharacters}`);
-    console.log("  every requested language already exists; nothing to generate or pay for");
+  if (state.quoteId) {
+    console.log(`  reusing the saved quoteId=${state.quoteId} (an accepted quote must not be re-priced)`);
   } else {
-    // Interpretation quotes expose availableCharacters; Music quotes expose balances.total.
-    const available = quote.availableCharacters ?? quote.balances?.total ?? null;
-    const affordable = available === null ? "unknown" : asBigInt(available) >= asBigInt(quote.totalCharacters ?? "0");
-    console.log(`  perTargetCharacters=${quote.perTargetCharacters} totalCharacters=${quote.totalCharacters} affordable=${affordable}`);
-    state.quoteId = quote.quoteId;
-    saveState(config, state);
+    const quote = await client.call("POST", `${INTERP}/projects/${projectId}/quotes`,
+      { settingsVersion: null, targetLanguages: targets });
+    if (quote.state === "ALL_TARGETS_EXIST") {
+      console.log(`  state=ALL_TARGETS_EXIST quoteId=${quote.quoteId} totalCharacters=${quote.totalCharacters}`);
+      console.log("  every requested language already exists; nothing to generate or pay for");
+      state.allTargetsExist = true;
+      saveState(config, state);
+    } else {
+      const availableCharacters = quote.availableCharacters ?? null;
+      const affordable = availableCharacters === null ? "unknown" : asBigInt(availableCharacters) >= asBigInt(quote.totalCharacters ?? "0");
+      console.log(`  perTargetCharacters=${quote.perTargetCharacters} totalCharacters=${quote.totalCharacters} affordable=${affordable}`);
+      state.quoteId = quote.quoteId;
+      saveState(config, state);
+    }
   }
 
   console.log("[7/9] generate");
   if (state.quoteId && !state.acceptanceId) {
+    const requestBody = { quoteId: state.quoteId };
     state.generateKey ??= newIdempotencyKey();
-    const generation = await client.call("POST", `${INTERP}/projects/${projectId}/generations`,
-      { quoteId: state.quoteId }, state.generateKey);
+    state.generateBody = requestBody;
+    saveState(config, state);
+    const generation = await client.call("POST", `${INTERP}/projects/${projectId}/generations`, requestBody, state.generateKey);
     state.acceptanceId = generation.acceptanceId;
     saveState(config, state);
     console.log(`  acceptanceId=${state.acceptanceId} reservedCharacters=${generation.reservedCharacters}`);
+  } else if (state.acceptanceId) {
+    console.log(`  reusing the saved acceptanceId=${state.acceptanceId} (a paid generation is never resubmitted)`);
+    await client.call("POST", `${INTERP}/projects/${projectId}/generations`, state.generateBody, state.generateKey);
   }
 
   console.log("[8/9] poll targets until each language is finished");
@@ -239,49 +337,73 @@ async function main() {
     if (list.length && list.every((t) => ["READY", "FAILED_RELEASED"].includes(t.state))) break;
     if (["READY", "FAILED"].includes(detail.summaryState)) break;
     if (Date.now() > deadline) {
-      throw new Error(`project ${projectId} is still processing; keep the projectId and poll again later`);
+      throw new TimeoutFailure(`project ${projectId} is still processing; keep the projectId and poll again later`);
     }
     console.log(`  summaryState -> ${detail.summaryState}`);
     await sleep(jitteredDelay(null));
   }
 
+  const readyTargets = [];
+  const failedTargets = [];
   for (const target of detail.targets ?? []) {
     console.log(`  ${target.language} -> ${target.state} (${target.billingState})`);
-    if (target.action === "RETRY") {
-      const plan = await client.call("GET", `${INTERP}/projects/${projectId}/targets/${target.targetId}/retry-plan`);
-      console.log(`    retry plan: characters=${plan.characters} nextReservationCycle=${plan.nextReservationCycle} retryable=${plan.retryable}`);
+    if (target.state === "READY") {
+      readyTargets.push(target);
+    } else {
+      failedTargets.push(target);
+      if (target.action === "RETRY") {
+        const plan = await client.call("GET", `${INTERP}/projects/${projectId}/targets/${target.targetId}/retry-plan`);
+        console.log(`    retry plan: characters=${plan.characters} nextReservationCycle=${plan.nextReservationCycle} retryable=${plan.retryable}`);
+      }
     }
   }
 
-  const ready = (detail.targets ?? []).filter((target) => target.state === "READY");
-  if (!ready.length) {
-    console.log("no target finished ready; nothing to play or export");
-    console.log("OK: Interpretation quickstart completed (no ready target)");
-    return;
+  if (!readyTargets.length) {
+    console.error(`FAILED: no target language produced a result (${failedTargets.length} failed). Nothing to download.`);
+    console.error(`Recoverable: projectId=${projectId}`);
+    return EXIT_NO_MEDIA;
+  }
+  if (failedTargets.length) {
+    console.log(`PARTIAL: ${readyTargets.length} ready, ${failedTargets.length} failed (failed targets keep their own retry plan)`);
+  } else {
+    console.log(`ALL READY: ${readyTargets.length} target(s)`);
   }
 
   console.log("[9/9] playback, export and download");
-  const playback = await client.call("GET", `${INTERP}/assets/${ready[0].outputAssetId}/playback`);
+  const playback = await client.call("GET", `${INTERP}/assets/${readyTargets[0].outputAssetId}/playback`);
   console.log(`  playback url expires at ${playback.expiresAt}`);
 
-  const exportResponse = await client.call("POST", `${INTERP}/targets/${ready[0].targetId}/exports`,
-    { format: config.exportFormat });
-  const exportId = exportResponse.exportId;
-  console.log(`  exportId=${exportId} state=${exportResponse.state}`);
+  if (!state.exportId) {
+    const exportResponse = await client.call("POST", `${INTERP}/targets/${readyTargets[0].targetId}/exports`,
+      { format: config.exportFormat });
+    state.exportId = exportResponse.exportId;
+    saveState(config, state);
+  }
+  console.log(`  exportId=${state.exportId}`);
 
   const destination = join(config.outputDir, `interpretation_output.${config.exportFormat}`);
+  const renewalLimit = playback.renewalAttemptLimit === null || playback.renewalAttemptLimit === undefined
+    ? 1 : Number(playback.renewalAttemptLimit);
+  let renewals = 0;
   for (;;) {
-    const download = await client.call("GET", `${INTERP}/exports/${exportId}/download`);
+    const download = await client.call("GET", `${INTERP}/exports/${state.exportId}/download`);
     if (download.state === "READY") {
       try {
-        const { contentType, payload } = await client.fetchBytes(download.url);
-        if (!payload.length) throw new ApiError(-1, "export produced an empty body");
+        const { contentType, payload } = await client.fetchMedia(download.url, config.exportFormat);
         writeFileSync(destination, payload);
         console.log(`  wrote ${destination} (${payload.length} bytes, ${contentType})`);
         break;
       } catch (failure) {
-        // The product URL is temporary; ask the endpoint for a fresh one.
-        console.log(`  download URL rejected (${failure.message}); requesting a fresh URL`);
+        if (!(failure instanceof MediaUnavailable)) throw failure; // a real failure, not a renewal
+        renewals += 1;
+        if (renewals > renewalLimit) {
+          console.error(`FAILED: the download URL stayed unusable after ${renewals} renewal(s) (${failure.message}); exportId=${state.exportId} stays recoverable`);
+          return EXIT_API_ERROR;
+        }
+        if (Date.now() > deadline) {
+          throw new TimeoutFailure(`deadline reached while renewing the download URL; exportId=${state.exportId}`);
+        }
+        console.log(`  download URL not usable (${failure.message}); renewing (${renewals}/${renewalLimit})`);
         await sleep(1000);
         continue;
       }
@@ -291,19 +413,24 @@ async function main() {
     } else {
       throw new ApiError(download.errorCode ?? -1, `export ended in state ${download.state}`);
     }
-    if (Date.now() > deadline) throw new Error(`export ${exportId} did not become READY; keep the exportId`);
+    if (Date.now() > deadline) throw new TimeoutFailure(`export ${state.exportId} did not become READY; keep the exportId`);
     await sleep(jitteredDelay(null));
   }
 
   console.log("OK: Interpretation quickstart completed");
+  return EXIT_OK;
 }
 
-main().catch((error) => {
+main().then((code) => process.exit(code)).catch((error) => {
   if (error instanceof ApiError) {
     console.error(`FAILED: ${error.message}`);
     if (error.code === 401) console.error("The accessKey was rejected; check MYVOCAL_API_KEY.");
-    process.exit(1);
+    process.exit(EXIT_API_ERROR);
   }
-  console.error(`TIMEOUT: ${error.message}`);
-  process.exit(2);
+  if (error instanceof TimeoutFailure) {
+    console.error(`TIMEOUT: ${error.message}`);
+    process.exit(EXIT_TIMEOUT);
+  }
+  console.error(`FAILED: ${error.message}`);
+  process.exit(EXIT_API_ERROR);
 });

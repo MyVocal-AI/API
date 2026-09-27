@@ -1,22 +1,42 @@
 #!/usr/bin/env python3
 """Deterministic local stub of the MyVocal public API for running the examples.
 
-It is a development and validation aid: it reproduces the documented request and
-response shapes of the Text-to-Music and Interpretation endpoints so the example
-clients can be exercised end to end without consuming Characters, without a real
-API key and without calling any provider.
+Development/validation aid only: it reproduces the documented response shapes so the
+example clients can be exercised end to end without a real key, without spending
+Characters and without calling any provider.
 
-The behaviour is selected by the API key value, so the example scripts stay
-realistic and only read the documented environment variables:
+Response shapes follow the real DTOs (InterpretationApiModels, the Music service
+maps): language entries use `languageKey`/`displayName`/`sourceSupport`,
+`account.accessState` is ENABLED/DISABLED (Music) or ENABLED/FREE_LOCKED/
+ENTERPRISE_UNRESOLVED/SYNCING/UNRESOLVED (Interpretation), `balanceState` is
+AVAILABLE/LEDGER_UNAVAILABLE, quote `targets` is the `newTargets` alias and
+`renewalAttemptLimit` is 1.
 
-    stub-happy         normal happy path (default for any other value)
-    stub-401           every call returns HTTP 200 with {"code":401,...}
-    stub-bignum        Characters values above 2^53 (exactness check)
-    stub-timeout       the arrangement never becomes ready
-    stub-partial       Interpretation: one target ready, one failed_released
-    stub-export-retry  Interpretation: the export returns RETRY before READY
-    stub-expired-url   Interpretation: the first download URL has expired
-    stub-replay        Music: a create replay returns the project detail
+Idempotency follows the real rules rather than being permissive:
+
+  Music
+    - create replay returns the project detail (a replay is not the first response)
+    - a generation key is bound to projectId:quoteId; the same key with a different
+      body is 47008, and a consumed quote presented with a different key is 47007
+  Interpretation
+    - same key + same body replays; same key + different body is 47111
+    - an already-accepted quote presented with a different key reuses the existing
+      acceptance and does not reserve again
+
+Behaviour is selected by the API key value, so the example clients stay realistic:
+
+    stub-happy          happy path (default for any other value)
+    stub-401            HTTP 200 with {"code":401,...} on every call
+    stub-bignum         Characters values above 2^53
+    stub-timeout        the arrangement never becomes ready
+    stub-500            HTTP 500 carrying a code=1 body (HTTP status must be checked)
+    stub-partial        Interpretation: one target ready, one failed_released
+    stub-all-failed     Interpretation: every target failed_released
+    stub-export-retry   Interpretation: the export returns RETRY before READY
+    stub-expired-url    Interpretation: the first download URL has expired
+    stub-forbidden      Interpretation: every download URL returns 403
+    stub-html-media     Interpretation: the download URL returns an HTML error page
+    stub-drop           the first create/generation response is dropped (response lost)
 
 Usage:
     python3 myvocal_stub.py --port 8765
@@ -28,6 +48,7 @@ import json
 import os
 import re
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -36,12 +57,10 @@ FIXTURES = os.path.join(HERE, "fixtures")
 MUSIC = "/sound_clone/api/v1/music"
 INTERP = "/sound_clone/api/v1/interpretation"
 
-# Characters values chosen so that a double cannot tell them apart, while exact
-# 64-bit integers can: 9007199254740993 and 9007199254740992 both round to the same
-# IEEE-754 double, so a float-based client would consider them equal.
+# Characters values chosen so a double cannot tell them apart while exact 64-bit
+# integers can: both round to the same IEEE-754 double.
 BIG_QUOTE = 9007199254740993
 BIG_BALANCE = 9007199254740992
-BIG_TOTAL = 9007199254740992
 
 
 class Store:
@@ -54,13 +73,9 @@ class Store:
     def session(self, key):
         with self.lock:
             return self.by_key.setdefault(key, {
-                "projects": {},
-                "uploads": {},
-                "jobs": {},
-                "exports": {},
-                "seen_keys": {},
-                "polls": {},
-                "seq": 0,
+                "projects": {}, "uploads": {}, "jobs": {}, "exports": {},
+                "idem": {}, "quotes": {}, "seq": 0, "reservations": [],
+                "acceptances": {}, "dropped": set(),
             })
 
     def next_id(self, session, prefix):
@@ -73,17 +88,22 @@ STORE = Store()
 
 
 def scenario_of(api_key):
-    return (api_key or "").strip() or "stub-happy"
+    key = (api_key or "").strip()
+    return key if key.startswith("stub-") else "stub-happy"
+
+
+def digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
-    # ------------------------------------------------------------------ plumbing
-
     def log_message(self, fmt, *args):
         if os.environ.get("STUB_VERBOSE"):
             print("[stub] " + (fmt % args))
+
+    # ------------------------------------------------------------------ plumbing
 
     def _read_body(self):
         length = int(self.headers.get("Content-Length") or 0)
@@ -95,16 +115,11 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             return None
 
-    def _api_key(self):
-        return self.headers.get("accessKey")
-
-    def _send_json(self, payload, status=200, headers=None):
+    def _send_json(self, payload, status=200):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
-        for name, value in (headers or {}).items():
-            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
 
@@ -120,25 +135,22 @@ class Handler(BaseHTTPRequestHandler):
     def _success(self, data):
         self._send_json({"code": 1, "message": "success", "data": data})
 
-    def _error(self, code, message, action="CONTACT_SUPPORT", retryable=False):
+    def _error(self, code, message, action="CONTACT_SUPPORT", retryable=False, status=200):
         self._send_json({
             "code": code,
             "message": message,
             "data": {
-                "errorCode": str(code),
-                "messageKey": "stub.%s" % code,
-                "retryable": retryable,
-                "action": action,
-                "requestId": "stub-request",
+                "errorCode": str(code), "messageKey": "stub.%s" % code,
+                "retryable": retryable, "action": action, "requestId": "stub-request",
             },
-        })
+        }, status)
 
-    def _reject_if_unauthenticated(self):
-        if scenario_of(self._api_key()) == "stub-401":
-            # Documented authentication failure: HTTP 200, code 401, no data.
-            self._send_json({"code": 401, "message": "Key verification failed"})
-            return True
-        return False
+    def _drop_connection(self):
+        """Accept the request, then drop it without a response (lost response)."""
+        try:
+            self.connection.close()
+        except Exception:
+            pass
 
     def _fixture(self, name):
         path = os.path.join(FIXTURES, name)
@@ -169,18 +181,39 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split("?", 1)[0]
         query = self.path.split("?", 1)[1] if "?" in self.path else ""
 
-        # Object storage is a separate endpoint: it must not consume the JSON body path.
+        if path == "/_stats":
+            # Test-only introspection: lets a validation run assert that recovery did not
+            # create a second project or a second reservation.
+            key = self.headers.get("accessKey") or "stub-happy"
+            session = STORE.session(key)
+            self._send_json({
+                "projects": len(session["projects"]),
+                "uploads": len(session["uploads"]),
+                "jobs": len(session["jobs"]),
+                "exports": len(session["exports"]),
+                "quotes": len(session["quotes"]),
+                "reservations": len(session["reservations"]),
+                "reservationCharacters": sum(r.get("characters", 0) for r in session["reservations"]),
+            })
+            return
+
         if path.startswith("/_storage/"):
             self._storage(method, path)
             return
 
         body = self._read_body()
-        if self._reject_if_unauthenticated():
+        api_key = self.headers.get("accessKey")
+        scenario = scenario_of(api_key)
+
+        if scenario == "stub-401":
+            self._send_json({"code": 401, "message": "Key verification failed"})
+            return
+        if scenario == "stub-500":
+            # Deliberately contradictory: HTTP 500 carrying a business code of 1.
+            self._send_json({"code": 1, "message": "success", "data": {"projectId": "impossible"}}, 500)
             return
 
-        session = STORE.session(self._api_key())
-        scenario = scenario_of(self._api_key())
-
+        session = STORE.session(api_key)
         try:
             if path.startswith(MUSIC):
                 self._music(method, path[len(MUSIC):], body, session, scenario)
@@ -188,28 +221,41 @@ class Handler(BaseHTTPRequestHandler):
                 self._interpretation(method, path[len(INTERP):], body, session, scenario, query)
             else:
                 self._send_json({"code": -1, "message": "stub: no route", "data": None}, 404)
-        except Exception as failure:  # a stub must never crash the example run
+        except Exception as failure:
             self._send_json({"code": -1, "message": "stub failure: %s" % failure, "data": None}, 500)
 
     def _storage(self, method, path):
-        """Stands in for the presigned object-storage URL (no accessKey is sent here)."""
+        """Stands in for the presigned object-storage URL (no accessKey is sent here).
+
+        The scenario is carried in the URL path so a single stub process can serve
+        every scenario without being restarted.
+        """
         if self.headers.get("accessKey"):
             self._send_json({"code": -1, "message": "stub: accessKey must not be sent to storage"}, 400)
             return
+        parts = path.split("/")
+        scenario = parts[2] if len(parts) > 2 and parts[2] else "stub-happy"
+        rest = "/".join(parts[3:])
         if method == "PUT":
             length = int(self.headers.get("Content-Length") or 0)
             payload = self.rfile.read(length) if length else b""
-            etag = hashlib.md5(payload).hexdigest()
             self.send_response(200)
-            self.send_header("ETag", '"%s"' % etag)
+            self.send_header("ETag", '"%s"' % hashlib.md5(payload).hexdigest())
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
         if method == "GET":
-            if path.startswith("/_storage/expired/"):
+            if scenario == "stub-hang":
+                time.sleep(120)  # makes the client's own request timeout the deciding factor
+                return
+            if scenario == "stub-forbidden" or rest.startswith("expired/"):
                 self._send_json({"code": -1, "message": "stub: URL has expired"}, 403)
                 return
-            if "/wav/" in path:
+            if scenario == "stub-html-media":
+                # HTTP 200 with an HTML error page: must never be stored as media.
+                self._send_bytes(b"<html><body>Not found</body></html>", "text/html")
+                return
+            if "wav" in rest:
                 self._send_bytes(self._fixture("sample_source.wav"), "audio/wav")
                 return
             self._send_bytes(self._fixture("sample.mp3"), "audio/mpeg")
@@ -221,7 +267,7 @@ class Handler(BaseHTTPRequestHandler):
     def _music(self, method, rest, body, session, scenario):
         if rest == "/capabilities" and method == "GET":
             self._success({
-                "accessState": "AVAILABLE",
+                "accessState": "ENABLED",
                 "planKey": "PRO",
                 "ratePerMinute": 1920,
                 "rateVersion": "stub-music-v1",
@@ -246,13 +292,14 @@ class Handler(BaseHTTPRequestHandler):
             if body is None or not body.get("description"):
                 self._error(47001, "description is required")
                 return
-            if key in session["seen_keys"]:
-                if session["seen_keys"][key] != json.dumps(body, sort_keys=True):
+            canonical = {"op": "CREATE_PROJECT", "brief": body}
+            seen = session["idem"].get(key)
+            if seen:
+                if seen["canonical"] != canonical:
                     self._error(47008, "Idempotency key reused with a different body")
                     return
-                project_id = session["seen_keys"][key + ":project"]
-                # A replay re-reads the current resource instead of replaying the first response.
-                self._success(self._music_detail(session, project_id))
+                # A replay re-reads the current resource, not the first response.
+                self._success(self._music_detail(session, seen["resourceId"]))
                 return
             project_id = STORE.next_id(session, "mup")
             job_id = STORE.next_id(session, "muj")
@@ -260,13 +307,14 @@ class Handler(BaseHTTPRequestHandler):
                 "brief": body, "status": "ARRANGEMENT_GENERATING", "jobId": job_id,
                 "arrangementVersion": 1, "polls": 0, "quoteId": None, "songPolls": 0,
             }
-            session["seen_keys"][key] = json.dumps(body, sort_keys=True)
-            session["seen_keys"][key + ":project"] = project_id
             session["jobs"][job_id] = {"jobId": job_id, "projectId": project_id,
                                        "jobType": "ARRANGEMENT", "status": "QUEUED"}
+            session["idem"][key] = {"canonical": canonical, "resourceId": project_id}
+            if self._maybe_drop(session, scenario, "create"):
+                self._drop_connection()
+                return
             self._success({
-                "projectId": project_id,
-                "projectStatus": "ARRANGEMENT_GENERATING",
+                "projectId": project_id, "projectStatus": "ARRANGEMENT_GENERATING",
                 "job": {"jobId": job_id, "jobType": "ARRANGEMENT", "status": "QUEUED"},
                 "requestId": "stub-request",
             })
@@ -279,11 +327,10 @@ class Handler(BaseHTTPRequestHandler):
 
         match = re.fullmatch(r"/projects/([^/]+)", rest)
         if match and method == "GET":
-            project_id = match.group(1)
-            if project_id not in session["projects"]:
+            if match.group(1) not in session["projects"]:
                 self._error(47009, "Project is not available")
                 return
-            self._success(self._music_detail(session, project_id))
+            self._success(self._music_detail(session, match.group(1)))
             return
 
         match = re.fullmatch(r"/jobs/([^/]+)", rest)
@@ -304,25 +351,23 @@ class Handler(BaseHTTPRequestHandler):
 
         match = re.fullmatch(r"/projects/([^/]+)/quotes", rest)
         if match and method == "POST":
-            project_id = match.group(1)
-            project = session["projects"].get(project_id)
+            project = session["projects"].get(match.group(1))
             if not project:
                 self._error(47009, "Project is not available")
                 return
             if scenario == "stub-bignum":
-                rate, quoted, shortfall, remainder = 1920, BIG_QUOTE, "1", "0"
-                balances = {"monthly": str(BIG_BALANCE), "additional": "0", "total": str(BIG_TOTAL)}
+                quoted, shortfall, remainder = BIG_QUOTE, "1", "0"
+                balances = {"monthly": str(BIG_BALANCE), "additional": "0", "total": str(BIG_BALANCE)}
             else:
-                rate = 1920
-                quoted = 2880
-                shortfall = "0"
-                remainder = "7620"
+                quoted, shortfall, remainder = 2880, "0", "7620"
                 balances = {"monthly": "10500", "additional": "0", "total": "10500"}
             quote_id = STORE.next_id(session, "muq")
+            session["quotes"][quote_id] = {"quoteId": quote_id, "projectId": match.group(1),
+                                           "quotedCharacters": quoted, "consumed": False}
             project["quoteId"] = quote_id
             self._success({
-                "quoteId": quote_id, "projectId": project_id, "arrangementVersion": 1,
-                "planKey": "PRO", "ratePerMinute": rate, "rateVersion": "stub-music-v1",
+                "quoteId": quote_id, "projectId": match.group(1), "arrangementVersion": 1,
+                "planKey": "PRO", "ratePerMinute": 1920, "rateVersion": "stub-music-v1",
                 "durationSec": 90, "quotedCharacters": str(quoted),
                 "expiresAt": "2027-01-15T16:00:00", "affordable": True, "shortfall": shortfall,
                 "remainingAfterGeneration": remainder, "balances": balances,
@@ -337,23 +382,54 @@ class Handler(BaseHTTPRequestHandler):
             if not project:
                 self._error(47009, "Project is not available")
                 return
-            if body is None or not body.get("quoteId"):
+            key = self.headers.get("Idempotency-Key")
+            if not key:
+                self._error(47001, "Idempotency-Key is required")
+                return
+            quote_id = (body or {}).get("quoteId")
+            if not quote_id:
                 self._error(47001, "quoteId is required")
                 return
+            # The key is bound to the exact request it was accepted for.
+            canonical = {"op": "GENERATE", "projectId": project_id, "quoteId": quote_id}
+            seen = session["idem"].get(key)
+            if seen:
+                if seen["canonical"] != canonical:
+                    self._error(47008, "Idempotency key reused with a different body")
+                    return
+                job_id = seen["resourceId"]
+                self._success(self._music_job_read_model(session, job_id))
+                return
+            quote = session["quotes"].get(quote_id)
+            if quote is None or quote["projectId"] != project_id:
+                self._error(47007, "Quote is no longer valid")
+                return
+            if quote["consumed"]:
+                # The same quote with a different key is a conflict, like the real service.
+                self._error(47007, "Quote is no longer valid")
+                return
             job_id = STORE.next_id(session, "muj")
+            quote["consumed"] = True
             project["status"] = "GENERATING"
             project["songPolls"] = 0
             session["jobs"][job_id] = {"jobId": job_id, "projectId": project_id,
                                        "jobType": "SONG", "status": "QUEUED"}
+            session["idem"][key] = {"canonical": canonical, "resourceId": job_id}
+            session["reservations"].append({"op": "MUSIC_GENERATE", "projectId": project_id,
+                                            "jobId": job_id, "characters": quote["quotedCharacters"]})
+            if self._maybe_drop(session, scenario, "generate"):
+                self._drop_connection()
+                return
             self._success({"projectId": project_id, "jobId": job_id, "jobType": "SONG",
                            "status": "QUEUED",
-                           "reservedCharacters": "2880" if scenario != "stub-bignum" else str(BIG_QUOTE),
+                           "reservedCharacters": str(quote["quotedCharacters"]),
                            "createdAt": "2027-01-15T15:52:11", "requestId": "stub-request"})
             return
 
         match = re.fullmatch(r"/projects/([^/]+)/playback-url", rest)
         if match and method == "GET":
-            self._success({"assetId": "ma_stub", "url": self._base() + "/_storage/fixture",
+            self._success({"assetId": "ma_stub",
+                           "url": "%s/_storage/%s/media" % (self._base(), scenario_of(self._api_key())),
                            "expiresAt": "2027-01-15T16:10:00", "requestId": "stub-request"})
             return
 
@@ -368,6 +444,26 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         self._send_json({"code": -1, "message": "stub: no music route for %s" % rest, "data": None}, 404)
+
+    def _maybe_drop(self, session, scenario, stage):
+        # Keys like stub-drop-music / stub-drop-interp isolate the one-shot drop per product.
+        if not scenario.startswith("stub-drop"):
+            return False
+        if any(k.startswith(stage + ":") for k in session["dropped"]):
+            return False
+        session["dropped"].add("%s:once" % stage)
+        return True
+
+    def _music_job_read_model(self, session, job_id):
+        job = session["jobs"][job_id]
+        project = session["projects"][job["projectId"]]
+        status = "READY" if project["status"] == "READY" else "GENERATING"
+        return {"jobId": job_id, "projectId": job["projectId"], "jobType": job["jobType"],
+                "status": status,
+                "displayStage": "FINALIZING_LIBRARY_ITEM" if status == "READY" else "CREATING_MUSIC_AND_VOCALS",
+                "terminal": status == "READY", "failure": None, "attemptCount": None,
+                "createdAt": "2027-01-15T15:52:11", "updatedAt": "2027-01-15T15:56:40",
+                "requestId": "stub-request"}
 
     def _music_detail(self, session, project_id):
         project = session["projects"][project_id]
@@ -384,11 +480,8 @@ class Handler(BaseHTTPRequestHandler):
             ready_asset = {"assetId": "ma_stub", "durationMillis": "90000",
                            "sampleRateHz": 44100, "mimeType": "audio/mpeg"}
         return {
-            "projectId": project_id,
-            "parentProjectId": None,
-            "name": "Stub Song",
-            "projectStatus": project["status"],
-            "brief": project["brief"],
+            "projectId": project_id, "parentProjectId": None, "name": "Stub Song",
+            "projectStatus": project["status"], "brief": project["brief"],
             "arrangementVersion": project["arrangementVersion"],
             "arrangement": {"durationSec": 90, "sections": []},
             "activeQuote": None,
@@ -396,12 +489,13 @@ class Handler(BaseHTTPRequestHandler):
                           "status": "READY" if project["status"] == "READY" else "GENERATING",
                           "displayStage": "FINALIZING_LIBRARY_ITEM",
                           "terminal": project["status"] == "READY"},
-            "readyAsset": ready_asset,
-            "lastFailure": None,
-            "createdAt": "2027-01-15T15:50:02",
-            "updatedAt": "2027-01-15T15:56:40",
+            "readyAsset": ready_asset, "lastFailure": None,
+            "createdAt": "2027-01-15T15:50:02", "updatedAt": "2027-01-15T15:56:40",
             "requestId": "stub-request",
         }
+
+    def _api_key(self):
+        return self.headers.get("accessKey")
 
     # ------------------------------------------------------------------ interpretation
 
@@ -413,17 +507,18 @@ class Handler(BaseHTTPRequestHandler):
                 "languageCatalogVersion": "1",
                 "languageCatalogState": "CONFIGURED",
                 "formatCatalogVersion": "1",
-                "languages": [{"code": "es", "name": "Spanish", "sourceSupport": "SUPPORTED"},
-                              {"code": "fr", "name": "French", "sourceSupport": "SUPPORTED"}],
+                # Real field names: languageKey / displayName / sourceSupport.
+                "languages": [{"languageKey": "es", "displayName": "Spanish", "sourceSupport": "UNVERIFIED"},
+                              {"languageKey": "fr", "displayName": "French", "sourceSupport": "UNVERIFIED"}],
                 "audioFormats": ["mp3", "wav", "m4a", "aac", "flac", "aiff", "ogg", "oga", "opus", "weba"],
                 "videoFormats": ["mp4", "mov", "m4v", "mkv", "avi", "webm", "wmv", "mpeg", "mpg", "3gpp"],
                 "exportFormats": ["mp3", "wav", "flac", "mp4"],
                 "maxSourceBytes": "3221225472",
                 "planRates": [{"planKey": "PRO", "charactersPerMinutePerLanguage": 4000}],
                 "quoteTtlSeconds": 600,
-                "account": {"planKey": "PRO", "accessState": "AVAILABLE", "entitlementVersion": "1",
+                "account": {"planKey": "PRO", "accessState": "ENABLED", "entitlementVersion": "1",
                             "charactersPerMinutePerLanguage": 4000, "availableCharacters": "30000",
-                            "balanceState": "OK"},
+                            "balanceState": "AVAILABLE"},
                 "stageAvailability": {"project": "AVAILABLE", "upload": "AVAILABLE", "export": "AVAILABLE"},
             })
             return
@@ -436,13 +531,14 @@ class Handler(BaseHTTPRequestHandler):
             if body is None or not body.get("name"):
                 self._error(47101, "name is required")
                 return
-            if key in session["seen_keys"]:
-                if session["seen_keys"][key] != json.dumps(body, sort_keys=True):
+            canonical = {"op": "CREATE_PROJECT", "body": body}
+            seen = session["idem"].get(key)
+            if seen:
+                if seen["canonical"] != canonical:
                     self._error(47111, "Idempotency key reused with a different body")
                     return
-                project_id = session["seen_keys"][key + ":project"]
-                project = session["projects"][project_id]
-                self._success({"projectId": project_id, "state": project["state"],
+                project = session["projects"][seen["resourceId"]]
+                self._success({"projectId": seen["resourceId"], "state": project["state"],
                                "settingsVersion": project["settingsVersion"],
                                "requestId": "stub-request"})
                 return
@@ -452,11 +548,13 @@ class Handler(BaseHTTPRequestHandler):
                 "sourceLanguage": body.get("sourceLanguage"),
                 "targetLanguages": body.get("targetLanguages") or [],
                 "keyterms": [], "cloningStrength": None, "durationMs": "0",
-                "sourceState": "DRAFT", "sourceReady": False,
-                "uploadId": None, "targets": {}, "generationPolls": 0,
+                "sourceState": "DRAFT", "sourceReady": False, "uploadId": None,
+                "targets": {}, "generationPolls": 0,
             }
-            session["seen_keys"][key] = json.dumps(body, sort_keys=True)
-            session["seen_keys"][key + ":project"] = project_id
+            session["idem"][key] = {"canonical": canonical, "resourceId": project_id}
+            if self._maybe_drop(session, scenario, "create"):
+                self._drop_connection()
+                return
             self._success({"projectId": project_id, "state": "DRAFT", "settingsVersion": 1,
                            "requestId": "stub-request"})
             return
@@ -483,8 +581,7 @@ class Handler(BaseHTTPRequestHandler):
 
         match = re.fullmatch(r"/projects/([^/]+)", rest)
         if match and method == "GET":
-            project = session["projects"].get(match.group(1))
-            if not project:
+            if match.group(1) not in session["projects"]:
                 self._error(47102, "Project is not available")
                 return
             self._success(self._detail(session, match.group(1)))
@@ -525,13 +622,19 @@ class Handler(BaseHTTPRequestHandler):
             if not upload:
                 self._error(47124, "Upload session is not available")
                 return
+            # Real service: signing is only allowed while the session is CREATED/UPLOADING.
+            if upload["state"] not in ("CREATED", "UPLOADING"):
+                self._error(47124, "Upload session is not available")
+                return
+            upload["state"] = "UPLOADING"
             part_number = (body or {}).get("partNumber")
             if not isinstance(part_number, int) or not 1 <= part_number <= upload["totalParts"]:
                 self._error(47126, "Part does not match the session")
                 return
             self._success({"uploadId": upload["uploadId"], "partNumber": part_number,
                            "method": "PUT",
-                           "url": "%s/_storage/%s/%d" % (self._base(), upload["uploadId"], part_number),
+                           "url": "%s/_storage/%s/%s/%d" % (self._base(), scenario_of(self._api_key()),
+                                                               upload["uploadId"], part_number),
                            "requiredHeaders": {}, "expiresAt": "2027-01-15T16:07:11",
                            "requestId": "stub-request"})
             return
@@ -540,6 +643,9 @@ class Handler(BaseHTTPRequestHandler):
         if match and method == "POST":
             upload = session["uploads"].get(match.group(1))
             if not upload:
+                self._error(47124, "Upload session is not available")
+                return
+            if upload["state"] == "READY":
                 self._error(47124, "Upload session is not available")
                 return
             parts = (body or {}).get("parts")
@@ -572,7 +678,8 @@ class Handler(BaseHTTPRequestHandler):
                            "partSizeBytes": upload["partSizeBytes"], "totalParts": upload["totalParts"],
                            "uploadedParts": [{"partNumber": n, "etag": e, "size": str(s)}
                                              for n, (e, s) in sorted(upload["parts"].items())],
-                           "errorCode": None, "sourceAssetId": "ia_stub" if upload["state"] == "READY" else None,
+                           "errorCode": None,
+                           "sourceAssetId": "ia_stub" if upload["state"] == "READY" else None,
                            "sourceVersion": 1, "durationMs": "90000",
                            "media": self._media() if upload["state"] == "READY" else None,
                            "requestId": "stub-request"})
@@ -593,6 +700,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             existing = [code for code in requested if code in project["targets"]]
             new = [code for code in requested if code not in project["targets"]]
+            # `targets` is the newTargets alias, never a union with existingTargets.
+            new_dtos = [{"language": code, "characters": "6000"} for code in new]
             if not new:
                 self._success({"quoteId": None, "projectId": match.group(1), "settingsVersion": 1,
                                "sourceDurationMs": "90000", "planKey": "PRO",
@@ -604,23 +713,23 @@ class Handler(BaseHTTPRequestHandler):
                                                     "action": "NONE"} for code in existing],
                                "newTargets": [], "targets": [], "totalCharacters": "0",
                                "availableCharacters": "30000", "estimatedRemainingCharacters": "30000",
-                               "balanceState": "OK", "state": "ALL_TARGETS_EXIST", "expiresAt": None,
-                               "requestId": "stub-request"})
+                               "balanceState": "AVAILABLE", "state": "ALL_TARGETS_EXIST",
+                               "expiresAt": None, "requestId": "stub-request"})
                 return
             quote_id = STORE.next_id(session, "iq")
+            session["quotes"][quote_id] = {"quoteId": quote_id, "new": new,
+                                           "acceptedAcceptanceId": None}
             project["quoteId"] = quote_id
             project["quoteLanguages"] = new
             self._success({"quoteId": quote_id, "projectId": match.group(1), "settingsVersion": 1,
                            "sourceDurationMs": "90000", "planKey": "PRO",
                            "rateVersion": "stub-interp-v1", "charactersPerMinutePerLanguage": 4000,
                            "perTargetCharacters": "6000", "requestedLanguages": requested,
-                           "existingTargets": [], "newTargets": [{"language": code, "characters": "6000"}
-                                                                 for code in new],
-                           "targets": [{"language": code, "characters": "6000"} for code in new],
+                           "existingTargets": [], "newTargets": new_dtos, "targets": new_dtos,
                            "totalCharacters": str(6000 * len(new)), "availableCharacters": "30000",
                            "estimatedRemainingCharacters": str(30000 - 6000 * len(new)),
-                           "balanceState": "OK", "state": "ACTIVE", "expiresAt": "2027-01-15T16:05:00",
-                           "requestId": "stub-request"})
+                           "balanceState": "AVAILABLE", "state": "ACTIVE",
+                           "expiresAt": "2027-01-15T16:05:00", "requestId": "stub-request"})
             return
 
         match = re.fullmatch(r"/projects/([^/]+)/targets/([^/]+)/retry-plan", rest)
@@ -639,31 +748,62 @@ class Handler(BaseHTTPRequestHandler):
 
         match = re.fullmatch(r"/projects/([^/]+)/generations", rest)
         if match and method == "POST":
-            project = session["projects"].get(match.group(1))
+            project_id = match.group(1)
+            project = session["projects"].get(project_id)
             if not project:
                 self._error(47102, "Project is not available")
                 return
-            if not (body or {}).get("quoteId"):
+            key = self.headers.get("Idempotency-Key")
+            if not key:
+                self._error(47101, "Idempotency-Key is required")
+                return
+            quote_id = (body or {}).get("quoteId")
+            if not quote_id:
                 self._error(47101, "quoteId is required")
+                return
+            canonical = {"op": "GENERATE", "projectId": project_id, "quoteId": quote_id}
+            seen = session["idem"].get(key)
+            if seen:
+                if seen["canonical"] != canonical:
+                    self._error(47111, "Idempotency key reused with a different body")
+                    return
+                self._success(self._acceptance(session, seen["resourceId"]))
+                return
+            quote = session["quotes"].get(quote_id)
+            if quote is None:
+                self._error(47109, "Quote is no longer valid")
+                return
+            if quote["acceptedAcceptanceId"]:
+                # Same quote presented with a different key: reuse, never charge twice.
+                self._success(self._acceptance(session, quote["acceptedAcceptanceId"]))
                 return
             acceptance = STORE.next_id(session, "ia")
             targets = []
-            for code in project.get("quoteLanguages", []):
+            for code in quote["new"]:
                 target_id = STORE.next_id(session, "it")
                 job_id = STORE.next_id(session, "ij")
                 project["targets"][code] = {"targetId": target_id, "state": "QUEUED",
                                             "jobId": job_id, "language": code}
-                session["jobs"][job_id] = {"jobId": job_id, "projectId": match.group(1),
+                session["jobs"][job_id] = {"jobId": job_id, "projectId": project_id,
                                            "targetId": target_id, "language": code, "state": "QUEUED"}
                 targets.append({"targetId": target_id, "language": code, "generationId": acceptance,
                                 "state": "QUEUED", "jobId": job_id, "reservationCycle": 1,
                                 "reservedCharacters": "6000"})
+            quote["acceptedAcceptanceId"] = acceptance
             project["generationPolls"] = 0
+            session["acceptances"][acceptance] = project_id
+            session["idem"][key] = {"canonical": canonical, "resourceId": acceptance}
+            session["reservations"].append({"op": "INTERPRETATION_GENERATE", "projectId": project_id,
+                                            "acceptanceId": acceptance,
+                                            "languages": list(quote["new"]),
+                                            "characters": 6000 * len(quote["new"])})
+            if self._maybe_drop(session, scenario, "generate"):
+                self._drop_connection()
+                return
             self._success({"acceptanceId": acceptance, "generationId": acceptance,
-                           "projectId": match.group(1), "quoteId": project["quoteId"],
-                           "state": "ACCEPTED", "targets": targets, "existingTargets": [],
-                           "newTargets": [{"language": code, "characters": "6000"}
-                                          for code in project.get("quoteLanguages", [])],
+                           "projectId": project_id, "quoteId": quote_id, "state": "ACCEPTED",
+                           "targets": targets, "existingTargets": [],
+                           "newTargets": [{"language": code, "characters": "6000"} for code in quote["new"]],
                            "reservedCharacters": str(6000 * len(targets)), "reservationCycle": 1,
                            "requestId": "stub-request"})
             return
@@ -684,8 +824,9 @@ class Handler(BaseHTTPRequestHandler):
         match = re.fullmatch(r"/assets/([^/]+)/playback", rest)
         if match and method == "GET":
             self._success({"assetId": match.group(1), "state": "READY", "mimeType": "audio/mpeg",
-                           "url": self._base() + "/_storage/fixture", "expiresAt": "2027-01-15T16:10:00",
-                           "assetVersion": "1", "rangeSupported": True, "renewalAttemptLimit": 3,
+                           "url": "%s/_storage/%s/media" % (self._base(), scenario_of(self._api_key())),
+                           "expiresAt": "2027-01-15T16:10:00",
+                           "assetVersion": "1", "rangeSupported": True, "renewalAttemptLimit": 1,
                            "requestId": "stub-request"})
             return
 
@@ -693,8 +834,7 @@ class Handler(BaseHTTPRequestHandler):
         if match and method == "POST":
             export_id = STORE.next_id(session, "ie")
             session["exports"][export_id] = {"exportId": export_id, "targetId": match.group(1),
-                                             "format": (body or {}).get("format") or "wav",
-                                             "polls": 0}
+                                             "format": (body or {}).get("format") or "wav", "polls": 0}
             self._success({"exportId": export_id, "targetId": match.group(1),
                            "format": (body or {}).get("format") or "wav", "state": "PROCESSING",
                            "requestId": "stub-request"})
@@ -716,20 +856,34 @@ class Handler(BaseHTTPRequestHandler):
                 self._success({"exportId": record["exportId"], "format": record["format"],
                                "state": state, "mimeType": None, "url": None, "expiresAt": None,
                                "assetVersion": None, "rangeSupported": False,
-                               "renewalAttemptLimit": 3, "requestId": "stub-request"})
+                               "renewalAttemptLimit": 1, "requestId": "stub-request"})
                 return
             expired = scenario == "stub-expired-url" and record["polls"] == 1
-            url = self._base() + ("/_storage/expired/%s" % record["exportId"] if expired
-                                  else "/_storage/wav/%s" % record["exportId"])
+            if expired:
+                url = "%s/_storage/%s/expired/%s" % (self._base(), scenario, record["exportId"])
+            else:
+                url = "%s/_storage/%s/wav/%s" % (self._base(), scenario, record["exportId"])
             self._success({"exportId": record["exportId"], "format": record["format"], "state": "READY",
                            "mimeType": "audio/wav", "url": url,
                            "expiresAt": "2027-01-15T16:20:00", "assetVersion": "1",
-                           "rangeSupported": True, "renewalAttemptLimit": 3,
+                           "rangeSupported": True, "renewalAttemptLimit": 1,
                            "requestId": "stub-request"})
             return
 
         self._send_json({"code": -1, "message": "stub: no interpretation route for %s" % rest,
                          "data": None}, 404)
+
+    def _acceptance(self, session, acceptance_id):
+        project_id = session["acceptances"][acceptance_id]
+        project = session["projects"][project_id]
+        targets = [{"targetId": t["targetId"], "language": code, "generationId": acceptance_id,
+                    "state": t["state"], "jobId": t["jobId"], "reservationCycle": 1,
+                    "reservedCharacters": "6000"} for code, t in project["targets"].items()]
+        return {"acceptanceId": acceptance_id, "generationId": acceptance_id, "projectId": project_id,
+                "quoteId": project.get("quoteId"), "state": "ACCEPTED", "targets": targets,
+                "existingTargets": [], "newTargets": [],
+                "reservedCharacters": str(6000 * len(targets)), "reservationCycle": 1,
+                "requestId": "stub-request"}
 
     def _draft(self, session, project_id):
         project = session["projects"][project_id]
@@ -745,12 +899,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def _detail(self, session, project_id):
         project = session["projects"][project_id]
+        scenario = scenario_of(self._api_key())
         if project["targets"] and project["generationPolls"] < 3:
             project["generationPolls"] += 1
-            codes = list(project["targets"].keys())
-            for index, code in enumerate(codes):
+            for index, code in enumerate(list(project["targets"].keys())):
                 target = project["targets"][code]
-                if scenario_of(self._api_key()) == "stub-partial" and index == 1:
+                failed = (scenario == "stub-all-failed"
+                          or (scenario == "stub-partial" and index == 1))
+                if failed:
                     target["state"] = "FAILED_RELEASED"
                     session["jobs"][target["jobId"]]["state"] = "RELEASED"
                     session["jobs"][target["jobId"]]["errorCode"] = "47118"
@@ -821,8 +977,6 @@ def make_fixtures(duration_seconds=1, sample_rate=8000):
                         "-i", "anullsrc=r=%d:cl=mono" % sample_rate, "-t", str(duration_seconds),
                         mp3_path], check=True)
     except Exception:
-        # Without ffmpeg the music download fixture falls back to the WAV bytes; the
-        # examples only require an audio content type and a non-empty payload.
         with open(mp3_path, "wb") as handle:
             handle.write(header + data)
     return wav_path, mp3_path
@@ -831,6 +985,7 @@ def make_fixtures(duration_seconds=1, sample_rate=8000):
 def main():
     parser = argparse.ArgumentParser(description="MyVocal public API local stub")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--storage-scenario", default="")
     parser.add_argument("--make-fixtures", action="store_true")
     args = parser.parse_args()
 
@@ -839,6 +994,7 @@ def main():
         return
 
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    server.storage_scenario = args.storage_scenario
     print("stub listening on http://127.0.0.1:%d" % args.port, flush=True)
     server.serve_forever()
 

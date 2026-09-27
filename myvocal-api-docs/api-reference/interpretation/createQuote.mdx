@@ -75,7 +75,7 @@ Quoting is free. The price is per **new** target language: adding a language to 
 </ResponseField>
 
 <ResponseField name="targets" type="array">
-  The union of the above.
+  The languages a submission would create and reserve now. This field is **the same content as `newTargets`**, kept under its pre-decision name — it is **not** a union of `existingTargets` and `newTargets`, and it excludes languages the project already carries.
 </ResponseField>
 
 <ResponseField name="totalCharacters" type="string">
@@ -91,7 +91,7 @@ Quoting is free. The price is per **new** target language: adding a language to 
 </ResponseField>
 
 <ResponseField name="balanceState" type="string | null">
-  Balance state.
+  `AVAILABLE` or `LEDGER_UNAVAILABLE` for this response, or `null`. It describes the balance fields of **this** response only; a `LEDGER_UNAVAILABLE` value means `availableCharacters` and `estimatedRemainingCharacters` are `null` rather than guessed.
 </ResponseField>
 
 <ResponseField name="state" type="string">
@@ -131,11 +131,10 @@ curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projec
     "requestedLanguages": ["es", "fr"],
     "existingTargets": [],
     "newTargets": [ { "language": "es", "characters": "6000" }, { "language": "fr", "characters": "6000" } ],
-    "targets": [ { "language": "es", "characters": "6000" }, { "language": "fr", "characters": "6000" } ],
-    "totalCharacters": "12000",
+    "targets": [ { "language": "es", "characters": "6000" }, { "language": "fr", "characters": "6000" } ],    "totalCharacters": "12000",
     "availableCharacters": "20000",
     "estimatedRemainingCharacters": "8000",
-    "balanceState": "OK",
+    "balanceState": "AVAILABLE",
     "state": "ACTIVE",
     "expiresAt": "2027-01-15T16:05:00",
     "requestId": "..."

@@ -118,8 +118,16 @@ A quote tells you the price and whether the account can afford it:
 | `balances.monthly` / `.additional` / `.total` | current balances by source |
 | `expiresAt` | when the quote stops being valid |
 | `state` | `ACTIVE`, `ALL_TARGETS_EXIST` or `CHANGED` |
+| `existingTargets` / `newTargets` | languages that already exist / would be created and charged |
+| `targets` | **the same content as `newTargets`**, kept under its pre-decision name — not a union with `existingTargets` |
 
 Music answers the same questions with `affordable`, `shortfall`, `remainingAfterGeneration` and `balances`, plus `ratePerMinute`, `rateVersion` and `quotedCharacters`.
+
+The balance fields are **per response and per product**, so do not apply one product's wording to the other:
+
+- Interpretation exposes `balanceState`, which is `AVAILABLE` or `LEDGER_UNAVAILABLE`, plus `availableCharacters` and `estimatedRemainingCharacters`. When the shared ledger read is unavailable, the two amounts are `null` and `balanceState` is `LEDGER_UNAVAILABLE` — a state, not a zero and not a guess.
+- Text-to-Music exposes `balances` (which may itself be `null` when the balance cannot be read) and has no `balanceState` field at all.
+- `account.accessState` is a different question again: for Interpretation it is one of `ENABLED`, `FREE_LOCKED`, `ENTERPRISE_UNRESOLVED`, `SYNCING` or `UNRESOLVED`; for Text-to-Music it is `ENABLED` or `DISABLED`.
 
 ## Quote lifetime and invalidation
 

@@ -49,7 +49,7 @@ Returns a temporary product URL for an asset, such as a finished target language
 </ResponseField>
 
 <ResponseField name="renewalAttemptLimit" type="number">
-  How many times the service will attempt to renew the underlying access.
+  How many renewal attempts one failed request may use before the authorization error is surfaced. Currently `1`: renew once, then report the error instead of retrying without bound.
 </ResponseField>
 
 <RequestExample>
@@ -75,7 +75,7 @@ curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/assets
     "expiresAt": "2027-01-15T16:10:00",
     "assetVersion": "1",
     "rangeSupported": true,
-    "renewalAttemptLimit": 3,
+    "renewalAttemptLimit": 1,
     "requestId": "..."
   }
 }
