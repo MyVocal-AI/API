@@ -1,0 +1,240 @@
+---
+title: "Text-to-Music quickstart"
+description: "Turn a creative brief into an original song and download the MP3 with the Text-to-Music API."
+---
+
+<Info>
+Text-to-Music is asynchronous and **poll-based**. It does not need a cloned voice, a workspace session or a callback URL. Every request uses the `accessKey` header, and create/accept endpoints also require an `Idempotency-Key`.
+</Info>
+
+Runnable clients for this guide: `examples/music/quickstart.py` and `examples/music/quickstart.mjs` (repository paths in this docs repository). Each one implements the whole flow below, including the polling and the error handling.
+
+## Endpoint summary
+
+| Step | Method and path |
+|---|---|
+| 1 | `GET /sound_clone/api/v1/music/capabilities` |
+| 2 | `POST /sound_clone/api/v1/music/projects` |
+| 3 | `GET /sound_clone/api/v1/music/projects/{projectId}` |
+| 4 | `GET /sound_clone/api/v1/music/jobs/{jobId}` |
+| 5 | `PUT /sound_clone/api/v1/music/projects/{projectId}/arrangement` |
+| 6 | `POST /sound_clone/api/v1/music/projects/{projectId}/arrangement/regenerate` |
+| 7 | `POST /sound_clone/api/v1/music/projects/{projectId}/quotes` |
+| 8 | `POST /sound_clone/api/v1/music/projects/{projectId}/generations` |
+| 9 | `GET /sound_clone/api/v1/music/projects/{projectId}/playback-url` |
+| 10 | `GET /sound_clone/api/v1/music/projects/{projectId}/download` |
+
+## Step 1: Read capabilities
+
+`capabilities` tells you the account state, the rate card and the accepted enum values. Read the genre, mood, style, duration and vocal-language ranges from this response instead of hard-coding them.
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/capabilities' \
+--header 'accessKey: <your_api_key>'
+```
+
+Relevant fields:
+
+- `accessState` and `planKey`: whether this account may generate music.
+- `ratePerMinute`: the Characters rate for the account's plan. The charge is `ceil(durationSec × ratePerMinute / 60)`.
+- `supportedDurationsSec`: the durations you may request (`60`, `90`, `120`, `180`).
+- `supportedVocalLanguages`: an array of `{code, name}` entries. **Send the `code`** (for example `en`), not the display name.
+- `genres`, `moods`, `vocalStyles`, `lyricsModes`: the accepted enum values.
+- `quoteTtlSeconds`: how long a quote stays valid (`600`).
+
+## Step 2: Create the project
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/projects' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--header 'Idempotency-Key: 6f1c1f0e0b8a4d1e' \
+--data '{
+  "description": "An upbeat summer pop song about a road trip along the coast.",
+  "genre": "POP",
+  "styleNotes": "Bright synths, driving drums, warm bass.",
+  "moods": ["UPLIFTING", "ENERGETIC"],
+  "vocalLanguage": "en",
+  "durationSec": 90,
+  "lyricsMode": "AUTO",
+  "vocalStyle": "BRIGHT_ENERGETIC"
+}'
+```
+
+A successful response returns the project and the arrangement job:
+
+```json
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "projectId": "mup_...",
+    "projectStatus": "ARRANGEMENT_GENERATING",
+    "job": { "jobId": "muj_...", "jobType": "ARRANGEMENT", "status": "QUEUED" },
+    "requestId": "..."
+  }
+}
+```
+
+`Idempotency-Key` rules:
+
+- Must be unique per distinct operation, 16–64 printable ASCII characters.
+- The same key with the same body replays safely; the same key with a different body is rejected with `code = 47008`.
+- A replay does **not** return the first response byte-for-byte. Keep the `projectId`/`jobId` and re-query the resource instead. See [Async jobs, polling and retries](/guides/async-jobs-and-retries).
+
+## Step 3: Poll until the arrangement is ready
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/projects/mup_...' \
+--header 'accessKey: <your_api_key>'
+```
+
+Poll `GET /projects/{projectId}` (or the job with `GET /jobs/{jobId}`) until one of these is true:
+
+- `projectStatus` is `ARRANGEMENT_READY`: the arrangement is finished and you may quote.
+- the job's `terminal` field is `true`: stop. Inspect `lastFailure` (project) or `failure` (job).
+
+`ARRANGEMENT_READY` means **the arrangement is done — not that the song exists**. The finished song is only available when `projectStatus` is `READY` and `readyAsset` is present.
+
+## Step 4: Review and optionally edit the arrangement
+
+`GET /projects/{projectId}` returns `arrangement` plus `arrangementVersion`. To change it:
+
+```bash
+curl --location --request PUT 'https://api.myvocal.ai/sound_clone/api/v1/music/projects/mup_.../arrangement' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{
+  "expectedVersion": 1,
+  "title": "Coast Road",
+  "styleSummary": "Bright summer pop with driving drums.",
+  "tempoBpm": 118,
+  "sections": [
+    { "sectionId": "<section_id>", "lyrics": "...", "styleNotes": "..." }
+  ]
+}'
+```
+
+You send only the fields that may change, addressed by `sectionId`. The service merges them into the immutable arrangement and re-validates the result. If `expectedVersion` no longer matches, the request is rejected with `code = 47016`; re-read the project and retry.
+
+To ask the service for a fresh arrangement instead:
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/projects/mup_.../arrangement/regenerate' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--header 'Idempotency-Key: 91b7c0de4a2f57c3' \
+--data '{ "expectedVersion": 1 }'
+```
+
+Editing or regenerating the arrangement invalidates the current quote.
+
+## Step 5: Quote before you spend Characters
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/projects/mup_.../quotes' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{ "arrangementVersion": 1 }'
+```
+
+The quote tells you exactly what the generation will cost:
+
+```json
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "quoteId": "muq_...",
+    "projectId": "mup_...",
+    "arrangementVersion": 1,
+    "durationSec": 90,
+    "ratePerMinute": 2220,
+    "quotedCharacters": "3330",
+    "affordable": true,
+    "shortfall": "0",
+    "remainingAfterGeneration": "7170",
+    "balances": { "monthly": "10500", "additional": "0", "total": "10500" },
+    "expiresAt": "2027-01-15T16:00:00"
+  }
+}
+```
+
+<Warning>
+Every Characters value in this response (`quotedCharacters`, `shortfall`, `remainingAfterGeneration`, `balances.*`) is a **JSON string**, because the API serializes 64-bit integers as strings to preserve precision. Convert it to a real integer before doing arithmetic or comparisons — never compare these values as strings. Quotes expire after `quoteTtlSeconds` (10 minutes); an expired quote is rejected with `code = 47006`.
+</Warning>
+
+## Step 6: Generate the song
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/projects/mup_.../generations' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--header 'Idempotency-Key: 3ce1a94f6d0b28e5' \
+--data '{ "quoteId": "muq_..." }'
+```
+
+```json
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "projectId": "mup_...",
+    "jobId": "muj_...",
+    "jobType": "SONG",
+    "status": "QUEUED",
+    "reservedCharacters": "3330",
+    "createdAt": "2027-01-15T15:52:11"
+  }
+}
+```
+
+`reservedCharacters` is a string for the same reason as above. Generation does not wait for the song; poll the job or the project.
+
+<Warning>
+A quote can be consumed only once. Submitting the same `quoteId` again with a **different** idempotency key is rejected with `code = 47007`. To recover, keep the `projectId`/`jobId` and query the existing project instead of re-submitting.
+</Warning>
+
+## Step 7: Poll the song
+
+Poll `GET /projects/{projectId}` until `projectStatus` is `READY` and `readyAsset` is present, or until the job is terminal with a failure. Typical progress:
+
+| `projectStatus` | Meaning |
+|---|---|
+| `ARRANGEMENT_GENERATING` | The arrangement is still being generated |
+| `ARRANGEMENT_READY` | Arrangement finished; ready to quote |
+| `GENERATING` | The song and vocals are being created |
+| `READY` | The song exists; `readyAsset` is available |
+
+For jobs, `job.status` is `QUEUED`, `GENERATING`, `FINALIZING`, `SETTLING`, `READY`, `FAILED` or `RECOVERY_REQUIRED`, and `terminal` is `true` for `READY`, `FAILED` and `RELEASED`. `displayStage` gives a coarser, user-facing stage (`QUEUED`, `CREATING_MUSIC_AND_VOCALS`, `FINALIZING_LIBRARY_ITEM`, `RECOVERY_REQUIRED`).
+
+`RECOVERY_REQUIRED` is **not** a failure and not a refund. Keep the `projectId`/`jobId` and query them; do not submit a new paid generation.
+
+## Step 8: Play and download
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/projects/mup_.../playback-url' \
+--header 'accessKey: <your_api_key>'
+```
+
+Returns `{ "assetId": "...", "url": "...", "expiresAt": "..." }`. The playback URL is temporary (10 minutes), so request it when you need it rather than storing it.
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/projects/mup_.../download' \
+--header 'accessKey: <your_api_key>' \
+--output song.mp3
+```
+
+<Warning>
+`GET /download` streams `audio/mpeg` bytes — it is **not** a JSON envelope on success. But when the request is rejected, the service answers with a JSON error envelope instead. Check the response `Content-Type` (or the `code` in the body) before saving the file, otherwise you may write an error message into a `.mp3`.
+</Warning>
+
+## Managing projects
+
+- `GET /sound_clone/api/v1/music/projects?page=1&pageSize=20` lists your projects. `page` must be ≥ 1 and `pageSize` must be `10`, `20` or `50`.
+- `PATCH /sound_clone/api/v1/music/projects/{projectId}/name` with `{ "name": "..." }` renames a project.
+- `DELETE /sound_clone/api/v1/music/projects/{projectId}` deletes it. If a generation is still in flight the request is rejected with `code = 47017` and the job is **not** cancelled. A successful delete is scoped to your ownership and is idempotent: success means the call needs no further delete handling — it is not proof that the project existed or that it was removed by this call.
+
+## Billing in one sentence
+
+Quoting is free; generating reserves Characters at `ceil(durationSec × ratePerMinute / 60)`, and the shared ledger settles or releases the reservation according to the real outcome. Full detail is in [Characters, quotes and billing](/guides/characters-and-quotes).

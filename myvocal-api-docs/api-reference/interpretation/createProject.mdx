@@ -1,0 +1,87 @@
+---
+title: "Create an interpretation project"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects"
+description: "Create an Interpretation project. The project starts empty; upload a source next."
+---
+
+Creates an empty project whose state is `DRAFT`. It does not start any processing — you set the draft, then upload a source.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+<ParamField header="Idempotency-Key" type="string" required>
+  Unique per operation: 16–64 printable ASCII characters. Same key with the same body replays safely; same key with a different body is rejected with `47111`.
+</ParamField>
+
+### Body
+
+<ParamField body="name" type="string" required>
+  Project name: non-empty after trimming, at most 120 code points.
+</ParamField>
+
+<ParamField body="sourceLanguage" type="string">
+  Optional. `null`, an empty string or `AUTO` means automatic detection; otherwise a language key from `capabilities.languages`.
+</ParamField>
+
+<ParamField body="targetLanguages" type="array">
+  Optional initial target languages. May be empty; the selection can be changed later with `PATCH /draft`.
+</ParamField>
+
+### Response
+
+<ResponseField name="projectId" type="string">
+  Stable project identifier.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  `DRAFT` right after creation.
+</ResponseField>
+
+<ResponseField name="settingsVersion" type="number">
+  The current draft version. Pass it as `expectedVersion` / `settingsVersion` in later calls to detect concurrent changes.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--header 'Idempotency-Key: 0d2b7c3a91f54b62' \
+--data '{
+  "name": "Launch video ES/FR",
+  "targetLanguages": ["es", "fr"]
+}'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "projectId": "ip_...",
+    "state": "DRAFT",
+    "settingsVersion": 1,
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+A replay re-reads the current project; the response may reflect later state than the first call. Keep `projectId` as the anchor.
+</Warning>
+
+### Common errors
+
+- `code = 47101`: the name is missing, empty or too long.
+- `code = 47111`: the `Idempotency-Key` was reused with a different body.
+- `code = 47122`: temporarily unavailable — retry with backoff.

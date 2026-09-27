@@ -1,0 +1,107 @@
+---
+title: "Update the creative brief"
+api: "PUT https://api.myvocal.ai/sound_clone/api/v1/music/projects/{projectId}/brief"
+description: "Replace the creative brief of a music project. Invalidates the current quote."
+---
+
+Replaces the whole brief and re-validates it with the same rules as create. An existing quote becomes stale, so quote again before generating.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The project identifier.
+</ParamField>
+
+### Body
+
+The body is the same `CreativeBrief` used by `POST /projects`:
+
+<ParamField body="description" type="string" required>
+  1–800 code points.
+</ParamField>
+
+<ParamField body="genre" type="string" required>
+  One of `capabilities.genres`.
+</ParamField>
+
+<ParamField body="styleNotes" type="string">
+  Optional, 0–120 code points.
+</ParamField>
+
+<ParamField body="moods" type="array" required>
+  1–3 distinct values from `capabilities.moods`.
+</ParamField>
+
+<ParamField body="vocalLanguage" type="string" required>
+  A `code` from `capabilities.supportedVocalLanguages`.
+</ParamField>
+
+<ParamField body="durationSec" type="number" required>
+  `60`, `90`, `120` or `180`.
+</ParamField>
+
+<ParamField body="lyricsMode" type="string" required>
+  `AUTO` or `CUSTOM`.
+</ParamField>
+
+<ParamField body="customLyrics" type="string">
+  Only used with `CUSTOM` (20–2800 code points).
+</ParamField>
+
+<ParamField body="vocalStyle" type="string" required>
+  One of `capabilities.vocalStyles`.
+</ParamField>
+
+### Response
+
+Returns the full project detail, identical in shape to `GET /projects/{projectId}`.
+
+<RequestExample>
+
+```bash
+curl --location --request PUT 'https://api.myvocal.ai/sound_clone/api/v1/music/projects/mup_.../brief' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{
+  "description": "A calmer indie folk song about autumn evenings.",
+  "genre": "FOLK_ACOUSTIC",
+  "styleNotes": "Fingerpicked guitar, soft brushes.",
+  "moods": ["CALM", "NOSTALGIC"],
+  "vocalLanguage": "en",
+  "durationSec": 120,
+  "lyricsMode": "AUTO",
+  "vocalStyle": "WARM_INTIMATE"
+}'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "projectId": "mup_...",
+    "projectStatus": "ARRANGEMENT_GENERATING",
+    "arrangementVersion": 2,
+    "activeQuote": null,
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+### Common errors
+
+- `code = 47001`: the brief failed validation.
+- `code = 47009`: the project does not exist **or** is not owned by your account.
+- `code = 47010`: another operation is already in progress for this project.

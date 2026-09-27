@@ -1,0 +1,129 @@
+---
+title: "Accept an interpretation quote"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/{projectId}/generations"
+description: "Accept a quote and start generating the translated target languages."
+---
+
+Accepts the quote, reserves its Characters per language and queues the work. The call returns immediately; poll the project or the jobs for progress.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+<ParamField header="Idempotency-Key" type="string" required>
+  Unique per operation: 16–64 printable ASCII characters. Same key with a different body is rejected with `47111`.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The project identifier.
+</ParamField>
+
+### Body
+
+<ParamField body="quoteId" type="string" required>
+  The quote to accept. Must not be `null` — see `ALL_TARGETS_EXIST` in the quote endpoint.
+</ParamField>
+
+### Response
+
+<ResponseField name="acceptanceId" type="string | null">
+  Stable identifier of the accepted generation. Use it (or the target/job IDs) to recover.
+</ResponseField>
+
+<ResponseField name="generationId" type="string | null">
+  Alias of `acceptanceId`.
+</ResponseField>
+
+<ResponseField name="projectId" type="string">
+  Project identifier.
+</ResponseField>
+
+<ResponseField name="quoteId" type="string">
+  The accepted quote.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  Acceptance state, for example `ACCEPTED`.
+</ResponseField>
+
+<ResponseField name="targets" type="array">
+  `{ targetId, language, generationId, state, jobId, reservationCycle, reservedCharacters }`. `reservedCharacters` is a **string**.
+</ResponseField>
+
+<ResponseField name="existingTargets" type="array">
+  Languages that already existed and were not charged again.
+</ResponseField>
+
+<ResponseField name="newTargets" type="array">
+  Languages newly created by this acceptance.
+</ResponseField>
+
+<ResponseField name="reservedCharacters" type="string">
+  Total reserved Characters, as a **string**.
+</ResponseField>
+
+<ResponseField name="reservationCycle" type="number">
+  Reservation cycle for this acceptance.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/ip_.../generations' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--header 'Idempotency-Key: 5ad0f3c7b21e4896' \
+--data '{ "quoteId": "iq_..." }'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "acceptanceId": "ia_...",
+    "generationId": "ia_...",
+    "projectId": "ip_...",
+    "quoteId": "iq_...",
+    "state": "ACCEPTED",
+    "targets": [
+      { "targetId": "it_...", "language": "es", "generationId": "ia_...", "state": "QUEUED", "jobId": "ij_...", "reservationCycle": 1, "reservedCharacters": "6000" },
+      { "targetId": "it_...", "language": "fr", "generationId": "ia_...", "state": "QUEUED", "jobId": "ij_...", "reservationCycle": 1, "reservedCharacters": "6000" }
+    ],
+    "existingTargets": [],
+    "newTargets": [ { "language": "es", "characters": "6000" }, { "language": "fr", "characters": "6000" } ],
+    "reservedCharacters": "12000",
+    "reservationCycle": 1,
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+Replays are not byte-for-byte copies of the first response, and there are two distinct behaviours:
+
+- **Same key, same body**: the existing acceptance is returned, re-read from the current state, so the target and job states may already have advanced.
+- **Same quote, a different key**: if the quote was already accepted, the existing acceptance is returned again **before any price re-check** and without charging twice. This is deliberate and differs from the Text-to-Music rule, where a consumed quote is rejected with `47007`.
+
+A **same key with a different body** is a real conflict (`47111`): re-read the project to discover what already happened instead of silently switching to a new key.
+</Warning>
+
+### Common errors
+
+- `code = 47111`: the `Idempotency-Key` was reused with a different body.
+- `code = 47110`: not enough Characters available.
+- `code = 47108` / `47109`: the quote expired or is no longer valid.
+- `code = 47103`: the source is not ready.
+- `code = 47119`: an ENTERPRISE account has no configured contract rate.
+- `code = 47128`: the plan is not entitled to generate.
+- `code = 47102`: the project does not exist **or** is not owned by your account.

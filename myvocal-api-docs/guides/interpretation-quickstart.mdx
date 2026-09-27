@@ -1,0 +1,322 @@
+---
+title: "Interpretation quickstart"
+description: "Upload an audio or video file and produce translated dubbing with the Interpretation API."
+---
+
+<Info>
+Interpretation takes an **uploaded audio or video file** and produces a translated, dubbed version of it, asynchronously. It is not live/interpreting in real time and it is not a microphone or WebSocket service: you upload a file, then poll until the result is ready. No cloned voice, workspace session or callback URL is required — only the `accessKey` header.
+</Info>
+
+Runnable clients for this guide: `examples/interpretation/quickstart.py` and `examples/interpretation/quickstart.mjs` (repository paths in this docs repository). Each one implements the whole flow below, including the multipart upload and the polling.
+
+## Endpoint summary
+
+| Step | Method and path |
+|---|---|
+| 1 | `GET /sound_clone/api/v1/interpretation/capabilities` |
+| 2 | `POST /sound_clone/api/v1/interpretation/projects` |
+| 3 | `PATCH /sound_clone/api/v1/interpretation/projects/{projectId}/draft` |
+| 4 | `POST /sound_clone/api/v1/interpretation/projects/{projectId}/uploads` |
+| 5 | `POST /sound_clone/api/v1/interpretation/uploads/{uploadId}/parts` |
+| 6 | `PUT <presigned part URL>` (object storage, not MyVocal) |
+| 7 | `POST /sound_clone/api/v1/interpretation/uploads/{uploadId}/complete` |
+| 8 | `GET /sound_clone/api/v1/interpretation/uploads/{uploadId}` |
+| 9 | `POST /sound_clone/api/v1/interpretation/projects/{projectId}/quotes` |
+| 10 | `POST /sound_clone/api/v1/interpretation/projects/{projectId}/generations` |
+| 11 | `GET /sound_clone/api/v1/interpretation/projects/{projectId}` |
+| 12 | `GET /sound_clone/api/v1/interpretation/assets/{assetId}/playback` |
+| 13 | `POST /sound_clone/api/v1/interpretation/targets/{targetId}/exports` |
+| 14 | `GET /sound_clone/api/v1/interpretation/exports/{exportId}/download` |
+
+## What input is supported
+
+Read the accepted formats and limits from the service instead of hard-coding them:
+
+- `audioFormats` — accepted audio containers/extensions.
+- `videoFormats` — accepted video containers/extensions.
+- `exportFormats` — `mp3`, `wav`, `flac`, `mp4`. `mp4` is the composed video and only applies to a video source.
+- `maxSourceBytes` — the maximum declared upload size (a JSON **string**).
+- `languages[]` — the language keys you may request, together with `sourceSupport`.
+- `languageCatalogState` — `CONFIGURED` when an authoritative list is configured.
+
+Share the same production limits note: the concrete production values are the ones the service returns at request time. Audio and video sources are both supported; a successful audio-source run does not by itself prove that every video container has been exercised end to end.
+
+## Step 1: Read capabilities
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/capabilities' \
+--header 'accessKey: <your_api_key>'
+```
+
+Look at `account.accessState`, `planRates`, `account.charactersPerMinutePerLanguage`, `quoteTtlSeconds` and the language/format lists. If `languageCatalogState` is `EMPTY`, quoting is not available for any language yet.
+
+## Step 2: Create the project
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--header 'Idempotency-Key: 0d2b7c3a91f54b62' \
+--data '{
+  "name": "Launch video ES/FR",
+  "targetLanguages": ["es", "fr"]
+}'
+```
+
+```json
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "projectId": "ip_...",
+    "state": "DRAFT",
+    "settingsVersion": 1,
+    "requestId": "..."
+  }
+}
+```
+
+`sourceLanguage` may be omitted, sent as `null`, as an empty string or as `AUTO` to auto-detect. `settingsVersion` is the concurrency anchor: draft and quote requests can carry the version they were based on, and a mismatch is rejected instead of silently overwriting someone else's change.
+
+## Step 3: Set the draft (optional)
+
+```bash
+curl --location --request PATCH 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/ip_.../draft' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{
+  "expectedVersion": 1,
+  "sourceLanguage": "en",
+  "targetLanguages": ["es", "fr"],
+  "keyterms": ["MyVocal"],
+  "cloningStrength": 7
+}'
+```
+
+<Info>
+For PATCH, "field omitted or `null`" means **keep the current value**, while a provided array — including an empty one — **replaces** the whole list. `cloningStrength` is only defaulted to `7` when the stored draft has no value yet; it is not re-defaulted on every PATCH.
+</Info>
+
+## Step 4: Create the upload session
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/ip_.../uploads' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{
+  "filename": "launch.mp4",
+  "size": 18432611,
+  "contentType": "video/mp4"
+}'
+```
+
+```json
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "uploadId": "iu_...",
+    "projectId": "ip_...",
+    "state": "CREATED",
+    "declaredSize": "18432611",
+    "partSizeBytes": 16777216,
+    "totalParts": 2,
+    "expiresAt": "2027-01-16T15:52:11"
+  }
+}
+```
+
+- `filename` and `size` are required. `size` is the exact byte length of the file you will upload, and it must be greater than 0 and not greater than `maxSourceBytes` (read it from capabilities).
+- `contentType` is optional; when omitted or blank the service uses `application/octet-stream`.
+- `partSizeBytes` and `totalParts` come from the service. **Use both as returned**; do not assume a fixed 16 MiB chunk size.
+
+## Step 5: Sign each part
+
+Ask for one presigned URL per part number, from `1` to `totalParts`:
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/uploads/iu_.../parts' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{ "partNumber": 1 }'
+```
+
+```json
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "uploadId": "iu_...",
+    "partNumber": 1,
+    "method": "PUT",
+    "url": "https://<storage-host>/...",
+    "requiredHeaders": { "Content-Length": "16777216" },
+    "expiresAt": "2027-01-15T16:07:11"
+  }
+}
+```
+
+## Step 6: Upload the bytes
+
+Send the bytes for that part to the returned `url`, using the returned `method`, and include every header in `requiredHeaders`.
+
+<Warning>
+The presigned `url` points at object storage, **not** at MyVocal. Do **not** send your `accessKey` (or any credential) to that URL — the signature in the URL is the authorization. Keep the `ETag` response header of every part: you need all of them in the next step.
+
+A part URL is short-lived (15 minutes by default). If you run out of time, request a fresh signed URL for the same part number — the session itself lasts 24 hours.
+</Warning>
+
+## Step 7: Complete the upload
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/uploads/iu_.../complete' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{
+  "parts": [
+    { "partNumber": 1, "etag": "<etag-1>" },
+    { "partNumber": 2, "etag": "<etag-2>" }
+  ]
+}'
+```
+
+Send **all** parts in part-number order with the exact ETags returned by storage. A missing, extra or mismatched part list is rejected with `code = 47126`.
+
+After the object is assembled, the service probes the media and reads the real container, streams and duration. The response `state` may already be `READY`, or still be `COMPLETING`/`PROBING`; poll the next endpoint until it is `READY`.
+
+## Step 8: Poll the upload until the source is ready
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/uploads/iu_...' \
+--header 'accessKey: <your_api_key>'
+```
+
+Poll while `state` is `CREATED`, `UPLOADING`, `COMPLETING` or `PROBING`. When it is `READY`, `media` describes the detected input (`inputFormat`, `containerName`, `audioStreamCount`, `video`, dimensions) and `sourceVersion` is set.
+
+<Warning>
+`COMPLETING` and `PROBING` do not mean you can generate yet. Only `READY` means the source is usable. A `FAILED` state carries an `errorCode`; `47125` means the file exceeded the size limit or had no content, `47127` means storage was unavailable.
+</Warning>
+
+After a successful upload, `GET /projects/{projectId}` shows `source.state = FROZEN` with the detected `durationMs` and `media`. That frozen source version is what generation uses.
+
+## Step 9: Quote the target languages
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/ip_.../quotes' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{ "settingsVersion": 1, "targetLanguages": ["es", "fr"] }'
+```
+
+The cost formula is `ceil(durationMs × rate / 60000)` **per new target language**. The rate comes from your plan (`planRates` / `charactersPerMinutePerLanguage`).
+
+<Warning>
+All Characters values (`perTargetCharacters`, `totalCharacters`, `availableCharacters`, `estimatedRemainingCharacters`, and every `targets[].characters`) are **JSON strings**. Convert them to integers before comparing or adding. Do not compare them lexicographically.
+</Warning>
+
+Two important states:
+
+- `state = "ALL_TARGETS_EXIST"` means every requested language already exists for this source. Then `quoteId` is `null` and `totalCharacters` is `"0"`. Read `existingTargets` and do **not** call generation with a null `quoteId`.
+- Otherwise `state = "ACTIVE"` and `quoteId` is set. Quotes expire after `quoteTtlSeconds`.
+
+Adding a language later only charges for the **new** target languages.
+
+## Step 10: Generate
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/ip_.../generations' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--header 'Idempotency-Key: 5ad0f3c7b21e4896' \
+--data '{ "quoteId": "iq_..." }'
+```
+
+```json
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "acceptanceId": "ia_...",
+    "generationId": "ia_...",
+    "projectId": "ip_...",
+    "quoteId": "iq_...",
+    "state": "ACCEPTED",
+    "reservedCharacters": "6420",
+    "reservationCycle": 1,
+    "targets": [
+      { "targetId": "it_...", "language": "es", "jobId": "ij_...", "state": "QUEUED", "reservedCharacters": "3210" }
+    ],
+    "requestId": "..."
+  }
+}
+```
+
+Idempotency here has two distinct behaviours, and neither is a byte-for-byte replay:
+
+- **Same key, same body**: the existing acceptance is returned; its target/job state may already have advanced. The stable anchors are `acceptanceId` and each `targetId`/`jobId`.
+- **Same quote, different key**: if that quote has already been accepted, the existing acceptance is returned again **without charging twice**, before any price re-check. This is intentional and differs from the Music rule.
+- **Same key, different body** (`code = 47111`): a real conflict. Do not silently switch to a new key; re-read the project to find out what already happened.
+
+## Step 11: Poll each target
+
+Poll `GET /projects/{projectId}` until every `targets[].state` is `READY`, or until a target reaches `FAILED_RELEASED` (which is the only retryable state). Per-target progress is `QUEUED` → `PREPARING` → `TRANSLATING` → `EXPORTING` → `READY`.
+
+- `summaryState` rolls the project up: `DRAFT` (no targets), `PROCESSING`, `PARTIAL_READY`, `READY` (all targets ready) or `FAILED`.
+- `jobs[]` and `GET /jobs/{jobId}` give the per-job view. `RECONCILING` means the outcome is still being reconciled — it is **not** a failure and **not** a refund. Only a real ledger `RELEASED` state may be described as released.
+- `GET /jobs/{jobId}` returns `47117` when the job does not exist **or** does not belong to your account. The API never distinguishes the two.
+- `nextPollAfterMs` is currently `null` (the service does not publish a suggested interval yet). Use your own bounded interval, for example 2–5 seconds with jitter.
+
+### Retrying a failed target
+
+Only a target with `action = "RETRY"` (state `FAILED_RELEASED`) may be retried:
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/ip_.../targets/it_.../retry-plan' \
+--header 'accessKey: <your_api_key>'
+```
+
+The plan returns the server's `characters`, `rateVersion` and `nextReservationCycle`. Confirm them with `POST /targets/{targetId}/retry`; the amount fields are a confirmation of the server's plan, **not** client-side pricing. `OPERATION_RETRY` is replay-safe.
+
+## Step 12: Play the result
+
+`GET /projects/{projectId}` gives each ready target an `outputAssetId`:
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/assets/ia_.../playback' \
+--header 'accessKey: <your_api_key>'
+```
+
+The response contains `state`, `mimeType`, a temporary `url`, `expiresAt` and `renewalAttemptLimit`. Request it when you need it; when it has expired, request a new one instead of caching it.
+
+## Step 13: Export a file
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/targets/it_.../exports' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{ "format": "wav" }'
+```
+
+`format` must be one of `exportFormats` (`mp3`, `wav`, `flac`, `mp4`); `mp4` requires a video source. The response returns `exportId` and `state`. Export is asynchronous: `state` starts as `PROCESSING`, and `RETRY` is a transient retry of the same export.
+
+## Step 14: Download the export
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/exports/ie_.../download' \
+--header 'accessKey: <your_api_key>'
+```
+
+Poll this **same** `exportId` while `state` is `PROCESSING` or `RETRY`; neither is a failure, and neither has a download URL yet. Do not create a new generation to work around it. When `state` is `READY`, `url` is the temporary product URL — download the bytes and, if the URL has expired, call this endpoint again for a fresh one.
+
+A non-empty `url` alone is not success: check that the returned `state` is `READY` and that the transfer actually produced media bytes.
+
+## Managing projects
+
+- `GET /sound_clone/api/v1/interpretation/projects?page=1&pageSize=20` lists your projects (`pageSize` is `10`, `20` or `50`).
+- `PATCH /sound_clone/api/v1/interpretation/projects/{projectId}/name` renames a project.
+- `DELETE /sound_clone/api/v1/interpretation/projects/{projectId}` deletes it.
+- `DELETE /sound_clone/api/v1/interpretation/projects/{projectId}/source` removes the uploaded source and returns the project to a draft response.
+
+## Billing in one sentence
+
+Quoting is free and charges nothing; generation reserves Characters per language, and each language settles or is released independently according to its real outcome. See [Characters, quotes and billing](/guides/characters-and-quotes).

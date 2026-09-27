@@ -1,0 +1,51 @@
+---
+title: "Delete a music project"
+api: "DELETE https://api.myvocal.ai/sound_clone/api/v1/music/projects/{projectId}"
+description: "Delete a music project owned by your account."
+---
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The project identifier.
+</ParamField>
+
+### Response
+
+A success envelope with no data payload.
+
+<RequestExample>
+
+```bash
+curl --location --request DELETE 'https://api.myvocal.ai/sound_clone/api/v1/music/projects/mup_...' \
+--header 'accessKey: <your_api_key>'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": null,
+  "requestId": "..."
+}
+```
+
+</ResponseExample>
+
+<Info>
+The delete is scoped to your ownership and is idempotent: a project that does not exist, or that belongs to another account, returns the same success. Success therefore means "this call needs no further delete handling" — it is **not** proof that the project existed or that this call removed it. Nothing about another account's data is affected or disclosed.
+</Info>
+
+### Common errors
+
+- `code = 47017`: a generation is still in flight for this project. The job is **not** cancelled; wait for it and retry the delete.

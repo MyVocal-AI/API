@@ -1,0 +1,73 @@
+---
+title: "Create a project version"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/music/projects/{projectId}/versions"
+description: "Branch a child project from the current arrangement."
+---
+
+Creates a child project that starts from the parent's current arrangement, so you can iterate without losing the original.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+<ParamField header="Idempotency-Key" type="string" required>
+  Unique per operation: 16–64 printable ASCII characters. Same key with a different body is rejected with `47008`.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The parent project identifier.
+</ParamField>
+
+### Body
+
+<ParamField body="copy" type="string" required>
+  Must be `CURRENT_ARRANGEMENT`. Any other value is rejected with `47001`.
+</ParamField>
+
+### Response
+
+Returns the full detail of the **child** project (same shape as `GET /projects/{projectId}`), with `parentProjectId` set to the parent.
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/projects/mup_.../versions' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--header 'Idempotency-Key: 7d2e5b41c9a30f86' \
+--data '{ "copy": "CURRENT_ARRANGEMENT" }'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "projectId": "mup_child...",
+    "parentProjectId": "mup_...",
+    "projectStatus": "ARRANGEMENT_READY",
+    "arrangementVersion": 1,
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+For this endpoint the first response and the replay have the **same shape** (project detail), but the field values change as the project progresses. Use the child `projectId` as the stable anchor.
+</Warning>
+
+### Common errors
+
+- `code = 47001`: `copy` is missing or is not `CURRENT_ARRANGEMENT`.
+- `code = 47008`: the `Idempotency-Key` was reused with a different body.
+- `code = 47009`: the parent project does not exist **or** is not owned by your account.

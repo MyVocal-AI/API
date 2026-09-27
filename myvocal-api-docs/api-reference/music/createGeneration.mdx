@@ -1,0 +1,120 @@
+---
+title: "Generate the song"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/music/projects/{projectId}/generations"
+description: "Accept a quote and start the song generation job."
+---
+
+Accepts a quote, reserves its Characters and queues a `SONG` job. The call returns immediately; it does not wait for the song.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+<ParamField header="Idempotency-Key" type="string" required>
+  Unique per operation: 16–64 printable ASCII characters. Same key with the same body replays; same key with a different body is rejected with `47008`.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The project identifier.
+</ParamField>
+
+### Body
+
+<ParamField body="quoteId" type="string" required>
+  The quote to accept. A quote can be consumed only once.
+</ParamField>
+
+### Response
+
+<ResponseField name="projectId" type="string">
+  Project identifier.
+</ResponseField>
+
+<ResponseField name="jobId" type="string">
+  The song job to poll.
+</ResponseField>
+
+<ResponseField name="jobType" type="string">
+  `SONG`.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  `QUEUED`.
+</ResponseField>
+
+<ResponseField name="reservedCharacters" type="string">
+  Characters reserved for this generation, as a **string**.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  Timestamp, `yyyy-MM-dd'T'HH:mm:ss`.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/projects/mup_.../generations' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--header 'Idempotency-Key: 3ce1a94f6d0b28e5' \
+--data '{ "quoteId": "muq_..." }'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "projectId": "mup_...",
+    "jobId": "muj_...",
+    "jobType": "SONG",
+    "status": "QUEUED",
+    "reservedCharacters": "3330",
+    "createdAt": "2027-01-15T15:52:11",
+    "requestId": "..."
+  }
+}
+```
+
+```json 200 Replay with the same key and body
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "jobId": "muj_...",
+    "projectId": "mup_...",
+    "jobType": "SONG",
+    "status": "GENERATING",
+    "displayStage": "CREATING_MUSIC_AND_VOCALS",
+    "terminal": false,
+    "failure": null,
+    "attemptCount": null,
+    "createdAt": "2027-01-15T15:52:11",
+    "updatedAt": "2027-01-15T15:55:01",
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+A replay re-reads the job: the field set and the status can differ from the first response. Use `jobId` to query the job rather than parsing the replay as if it were the original create payload.
+</Warning>
+
+### Common errors
+
+- `code = 47007`: this quote has already been consumed. Query the existing project/job instead of submitting again.
+- `code = 47006`: the quote has expired. Request a new quote.
+- `code = 47005`: not enough Characters available.
+- `code = 47008`: the `Idempotency-Key` was reused with a different body.
+- `code = 47010`: another generation is already in progress for this project.
+- `code = 47009`: the project does not exist **or** is not owned by your account.

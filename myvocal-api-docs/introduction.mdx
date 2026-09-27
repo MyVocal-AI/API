@@ -1,25 +1,48 @@
 ---
 title: "Introduction"
-description: "Clone voices with MyVocal, then turn them into speech or AI song covers."
+description: "Build with MyVocal: voice cloning, Text-to-Speech, AI Cover, Text-to-Music and Interpretation."
 ---
 
 <Info>
-MyVocal is built around voice cloning. Once you have a voice, you can use it for text-to-speech or AI song covers.
+MyVocal exposes several product APIs behind one public host and one `accessKey` header: **Voice**, **Text-to-Speech** (including the Accent model), **AI Cover**, **Text-to-Music** and **Interpretation**.
 </Info>
+
+## Product lines
+
+| Product line | What it does | Response style |
+|---|---|---|
+| Voice | Clone and manage voices | Synchronous JSON |
+| Text-to-Speech | Synthesize speech from text | Audio stream (default and `myvocal_v3`) |
+| AI Cover | Cover a song with a cloned voice | Asynchronous callback (webhook) |
+| Text-to-Music | Create an original song from a creative brief | Asynchronous, poll with the returned job/project IDs |
+| Interpretation | Upload audio or video, then produce translated dubbing | Asynchronous, poll with the returned project/job/target IDs |
 
 ## What you can build with MyVocal
 
 - Clone a custom voice with the Voice API.
 - Generate speech with that voice using the Text-to-Speech API.
 - Create AI song covers with the same voice using the AI Cover API.
+- Generate original music from a text brief with the Text-to-Music API.
+- Translate and dub an uploaded audio or video file with the Interpretation API.
 
 ## Core workflow
 
-Most MyVocal integrations follow a simple flow:
+Voice-based integrations usually follow a simple flow:
 
 1. Clone or prepare a voice
 2. Use the voice for text-to-speech
 3. Use the same voice for AI song covers
+
+<Info>
+Text-to-Music and Interpretation are **not** voice-dependent. They take a text brief (Text-to-Music) or an uploaded media file (Interpretation), so they do not require a cloned voice, and they do not require a workspace/browser session. Both authenticate with the same `accessKey` header.
+</Info>
+
+## Synchronous, streaming and asynchronous APIs
+
+- **Voice** and **user info** return JSON immediately.
+- **Text-to-Speech** returns an audio stream; read `Content-Type` before trusting the body.
+- **AI Cover** uses a callback URL that you provide. See [Callback](/callback).
+- **Text-to-Music** and **Interpretation** are **poll-based**. They return a project/job identifier immediately, then you poll the project or job endpoints until the resource reaches a terminal state. They do not require a callback URL and do not deliver webhooks.
 
 ## How TTS models work
 
@@ -55,5 +78,14 @@ portuguese_la
   </Card>
   <Card title="TTS Models & Migration" icon="arrows-rotate" href="/api-reference/tts/models">
     Learn when to use the default TTS path and when to use `myvocal_v3`.
+  </Card>
+  <Card title="Text-to-Music quickstart" icon="music" href="/guides/music-quickstart">
+    Go from a creative brief to a downloadable MP3.
+  </Card>
+  <Card title="Interpretation quickstart" icon="language" href="/guides/interpretation-quickstart">
+    Upload a file and produce translated dubbing.
+  </Card>
+  <Card title="Characters, quotes and retries" icon="coins" href="/guides/characters-and-quotes">
+    Understand quoting, reservation, settlement and release.
   </Card>
 </CardGroup>

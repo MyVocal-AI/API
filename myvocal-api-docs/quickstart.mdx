@@ -145,3 +145,56 @@ curl --location 'https://api.myvocal.ai/sound_clone/api/v1/tts/query' \
 <Card title="See full model details" icon="book" href="/api-reference/tts/models">
   Open TTS Models & Migration for the current public model list and migration guidance.
 </Card>
+
+## Step 8: Create music from a text brief
+
+Text-to-Music does not need a voice or a browser session. Send a creative brief with an `Idempotency-Key`, then poll the project.
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/projects' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--header 'Idempotency-Key: 6f1c1f0e0b8a4d1e' \
+--data '{
+  "description": "An upbeat summer pop song about a road trip along the coast.",
+  "genre": "POP",
+  "styleNotes": "Bright synths, driving drums, warm bass.",
+  "moods": ["UPLIFTING", "ENERGETIC"],
+  "vocalLanguage": "en",
+  "durationSec": 90,
+  "lyricsMode": "AUTO",
+  "vocalStyle": "BRIGHT_ENERGETIC"
+}'
+```
+
+The response returns `projectId` and an `ARRANGEMENT` job. When `projectStatus` is `ARRANGEMENT_READY`, request a quote, then generate the song. The complete flow is in the [Text-to-Music quickstart](/guides/music-quickstart).
+
+## Step 9: Dub an audio or video file
+
+Interpretation also uses only the `accessKey` header. Create a project, upload the file with a multipart upload, and let the service probe it.
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--header 'Idempotency-Key: 0d2b7c3a91f54b62' \
+--data '{
+  "name": "Launch video ES/FR",
+  "targetLanguages": ["es", "fr"]
+}'
+```
+
+The response returns `projectId` and `settingsVersion`. Quote and generate one target language at a time, then poll until each target is `READY`. The complete flow, including the presigned multipart upload, is in the [Interpretation quickstart](/guides/interpretation-quickstart).
+
+<Info>
+Both products are asynchronous and poll-based; they do not use callbacks. See [Async jobs, polling and retries](/guides/async-jobs-and-retries) and [Characters, quotes and billing](/guides/characters-and-quotes).
+</Info>
+
+<CardGroup cols={2}>
+  <Card title="Text-to-Music" icon="music" href="/guides/music-quickstart">
+    Brief → arrangement → quote → generate → MP3.
+  </Card>
+  <Card title="Interpretation" icon="language" href="/guides/interpretation-quickstart">
+    Upload → probe → quote → generate → export.
+  </Card>
+</CardGroup>

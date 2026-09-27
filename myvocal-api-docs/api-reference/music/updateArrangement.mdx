@@ -1,0 +1,110 @@
+---
+title: "Edit the arrangement"
+api: "PUT https://api.myvocal.ai/sound_clone/api/v1/music/projects/{projectId}/arrangement"
+description: "Edit an arrangement by merging the editable fields into the current immutable arrangement."
+---
+
+The body is an **edit request**, not a whole arrangement. The service merges your edit into the current immutable arrangement and re-validates the result.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The project identifier.
+</ParamField>
+
+### Body
+
+<ParamField body="expectedVersion" type="number" required>
+  The `arrangementVersion` you based this edit on. A mismatch is rejected with `47016`.
+</ParamField>
+
+<ParamField body="title" type="string">
+  Song title, 1–120 code points.
+</ParamField>
+
+<ParamField body="styleSummary" type="string">
+  Summary of the musical style, 1–500 code points.
+</ParamField>
+
+<ParamField body="tempoBpm" type="number">
+  `null`, or between `40` and `220`.
+</ParamField>
+
+<ParamField body="sections" type="array" required>
+  Sections to merge, addressed by `sectionId`: `{ sectionId, lyrics, styleNotes }`, in section order.
+</ParamField>
+
+### Validation rules
+
+The merged arrangement must satisfy:
+
+- 4–12 sections; every section `position` must equal its 1-based index.
+- Section types: `INTRO`, `VERSE`, `PRE_CHORUS`, `CHORUS`, `BRIDGE`, `OUTRO`, `OTHER`.
+- Each section `durationSec` is 5–60, and the durations must sum to the arrangement duration.
+- At least one `VERSE` and one `CHORUS` must be present.
+- Concatenated `lyrics`, trimmed, must be 20–2800 code points.
+
+### Response
+
+<ResponseField name="projectId" type="string">
+  Project identifier.
+</ResponseField>
+
+<ResponseField name="version" type="number">
+  The new arrangement version.
+</ResponseField>
+
+<ResponseField name="arrangement" type="object">
+  The merged, validated arrangement.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location --request PUT 'https://api.myvocal.ai/sound_clone/api/v1/music/projects/mup_.../arrangement' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{
+  "expectedVersion": 1,
+  "title": "Coast Road",
+  "styleSummary": "Bright summer pop with driving drums.",
+  "tempoBpm": 118,
+  "sections": [
+    { "sectionId": "<section_id>", "lyrics": "Where the highway meets the sea...", "styleNotes": "Warm pads" }
+  ]
+}'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "projectId": "mup_...",
+    "version": 2,
+    "arrangement": { "durationSec": 90, "sections": [ "..." ], "requestId": "..." }
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+Editing the arrangement makes the current quote stale. Request a new quote before generating.
+</Warning>
+
+### Common errors
+
+- `code = 47016`: `expectedVersion` does not match the current arrangement version. Re-read the project and retry.
+- `code = 47001`: the merge produced an arrangement that violates a validation rule.
+- `code = 47009`: the project does not exist **or** is not owned by your account.

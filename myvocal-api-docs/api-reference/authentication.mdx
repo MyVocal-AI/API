@@ -37,6 +37,27 @@ curl --location 'https://api.myvocal.ai/sound_clone/api/v1/user/info' \
 --header 'accessKey: <your_api_key>'
 ```
 
+## Text-to-Music and Interpretation
+
+Text-to-Music (`/sound_clone/api/v1/music`) and Interpretation (`/sound_clone/api/v1/interpretation`) use the same `accessKey` header, the same public host and the same API-key account as every other endpoint on this page. There is no separate key, scope, host or login for them.
+
+They do **not** require a cloned voice and do **not** require a browser/workspace session. The account that owns the key is always the owner of the resources it creates: no request body, path or query parameter can select a different owner. Requesting a resource you do not own and requesting one that does not exist return the same not-found error, so the API never reveals whether an identifier exists.
+
+Three differences from the synchronous endpoints are worth remembering:
+
+- Both products are **asynchronous**: they return a project/job identifier immediately and you poll for the result. See [Async jobs, polling and retries](/guides/async-jobs-and-retries).
+- The `Idempotency-Key` header is **required** on the create/accept endpoints. Use a unique printable ASCII value of 16–64 characters per distinct operation. Replaying the same key with the same body is safe; replaying it with a different body is a conflict.
+- Credits are measured in **Characters** and are quoted before they are spent. See [Characters, quotes and billing](/guides/characters-and-quotes).
+
+<CardGroup cols={2}>
+  <Card title="Text-to-Music quickstart" icon="music" href="/guides/music-quickstart">
+    Brief → arrangement → quote → generate → play/download.
+  </Card>
+  <Card title="Interpretation quickstart" icon="language" href="/guides/interpretation-quickstart">
+    Upload → probe → quote → generate → play → export/download.
+  </Card>
+</CardGroup>
+
 ## Accent model requests
 
 The Accent model (`myvocal_v3_accent_enhance`) reuses everything on this page: the same `accessKey` header, the same API host and the same TTS endpoints. There is no separate key, scope or endpoint to request, and no extra header to send.

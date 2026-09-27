@@ -1,0 +1,103 @@
+---
+title: "Music capabilities"
+api: "GET https://api.myvocal.ai/sound_clone/api/v1/music/capabilities"
+description: "Read the Text-to-Music account state, rate card and accepted enum values."
+---
+
+Read this endpoint first. It tells you what the account may do and which enum values the write endpoints accept, so you never have to hard-code them.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Response
+
+<ResponseField name="accessState" type="string">
+  Whether this account may use Text-to-Music.
+</ResponseField>
+
+<ResponseField name="planKey" type="string">
+  The account's plan, for example `STANDARD`, `PRO`, `BUSINESS` or `ENTERPRISE`.
+</ResponseField>
+
+<ResponseField name="ratePerMinute" type="number">
+  Characters per minute for this account. The charge is `ceil(durationSec × ratePerMinute / 60)`.
+</ResponseField>
+
+<ResponseField name="rateVersion" type="string">
+  Version label of the applicable rate.
+</ResponseField>
+
+<ResponseField name="balances" type="object">
+  `{ monthly, additional, total }`, each a **JSON string**. Convert before comparing.
+</ResponseField>
+
+<ResponseField name="quoteTtlSeconds" type="number">
+  How long a quote stays valid. Currently `600`.
+</ResponseField>
+
+<ResponseField name="supportedDurationsSec" type="array">
+  The durations you may request: `60`, `90`, `120`, `180`.
+</ResponseField>
+
+<ResponseField name="supportedVocalLanguages" type="array">
+  Entries shaped `{ code, name }`. Send the **`code`** as `vocalLanguage`, not the display name.
+</ResponseField>
+
+<ResponseField name="genres" type="array">
+  Accepted `genre` values: `POP`, `ROCK`, `HIP_HOP`, `ELECTRONIC`, `RNB_SOUL`, `INDIE`, `JAZZ`, `CINEMATIC`, `FOLK_ACOUSTIC`, `LATIN`, `COUNTRY`, `CLASSICAL`.
+</ResponseField>
+
+<ResponseField name="moods" type="array">
+  Accepted `moods` values: `UPLIFTING`, `ENERGETIC`, `ROMANTIC`, `DREAMY`, `MELANCHOLIC`, `DARK`, `CALM`, `HOPEFUL`, `DRAMATIC`, `PLAYFUL`, `NOSTALGIC`, `INTENSE`.
+</ResponseField>
+
+<ResponseField name="vocalStyles" type="array">
+  Accepted `vocalStyle` values: `WARM_INTIMATE`, `BRIGHT_ENERGETIC`, `POWERFUL_ANTHEMIC`, `SOFT_BREATHY`.
+</ResponseField>
+
+<ResponseField name="lyricsModes" type="array">
+  `AUTO`, `CUSTOM`.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/capabilities' \
+--header 'accessKey: <your_api_key>'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "accessState": "AVAILABLE",
+    "planKey": "PRO",
+    "ratePerMinute": 1920,
+    "rateVersion": "music-2026-08-26-v1",
+    "balances": { "monthly": "10500", "additional": "0", "total": "10500" },
+    "quoteTtlSeconds": 600,
+    "supportedDurationsSec": [60, 90, 120, 180],
+    "supportedVocalLanguages": [ { "code": "en", "name": "English" } ],
+    "genres": ["POP", "ROCK", "HIP_HOP", "ELECTRONIC", "RNB_SOUL", "INDIE", "JAZZ", "CINEMATIC", "FOLK_ACOUSTIC", "LATIN", "COUNTRY", "CLASSICAL"],
+    "moods": ["UPLIFTING", "ENERGETIC", "ROMANTIC", "DREAMY", "MELANCHOLIC", "DARK", "CALM", "HOPEFUL", "DRAMATIC", "PLAYFUL", "NOSTALGIC", "INTENSE"],
+    "vocalStyles": ["WARM_INTIMATE", "BRIGHT_ENERGETIC", "POWERFUL_ANTHEMIC", "SOFT_BREATHY"],
+    "lyricsModes": ["AUTO", "CUSTOM"],
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+### Common errors
+
+- `code = 401`, `"Key verification failed"`: the `accessKey` is missing, invalid or disabled. This is returned with HTTP `200` and **no** `data` field.
+- `code = 47018`: Text-to-Music is not available for this account or cohort.

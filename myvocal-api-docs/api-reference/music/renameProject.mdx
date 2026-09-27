@@ -1,0 +1,56 @@
+---
+title: "Rename a music project"
+api: "PATCH https://api.myvocal.ai/sound_clone/api/v1/music/projects/{projectId}/name"
+description: "Change the display name of a music project."
+---
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The project identifier.
+</ParamField>
+
+### Body
+
+<ParamField body="name" type="string" required>
+  The new name: non-empty after trimming, at most 120 code points.
+</ParamField>
+
+### Response
+
+A success envelope with no data payload.
+
+<RequestExample>
+
+```bash
+curl --location --request PATCH 'https://api.myvocal.ai/sound_clone/api/v1/music/projects/mup_.../name' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{ "name": "Coast Road (final)" }'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": null,
+  "requestId": "..."
+}
+```
+
+</ResponseExample>
+
+### Common errors
+
+- `code = 47001`: the name is missing, empty or too long.
+- `code = 47009`: the project does not exist **or** is not owned by your account.

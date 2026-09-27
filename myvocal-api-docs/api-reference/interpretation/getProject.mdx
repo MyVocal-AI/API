@@ -1,0 +1,136 @@
+---
+title: "Get an interpretation project"
+api: "GET https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/{projectId}"
+description: "Read the full state of an Interpretation project: source, targets and jobs."
+---
+
+This is the main polling endpoint for Interpretation.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The project identifier.
+</ParamField>
+
+### Response
+
+<ResponseField name="projectId" type="string">
+  Project identifier.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Project name.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  Aggregate project state: `DRAFT`, `UPLOADING`, `PROBING`, `PROCESSING`, `PARTIAL_READY`, `READY`, `FAILED` or `DELETED`.
+</ResponseField>
+
+<ResponseField name="summaryState" type="string">
+  Rolled-up state: `DRAFT`, `PROCESSING`, `PARTIAL_READY`, `READY` or `FAILED`.
+</ResponseField>
+
+<ResponseField name="sourceLanguage" type="string | null">
+  The source language, or `null` when it is auto-detected.
+</ResponseField>
+
+<ResponseField name="sourceDurationMs" type="string">
+  Detected duration of the frozen source, as a **string**.
+</ResponseField>
+
+<ResponseField name="settingsVersion" type="number">
+  Current draft version.
+</ResponseField>
+
+<ResponseField name="keyterms" type="array">
+  Current keyterms.
+</ResponseField>
+
+<ResponseField name="cloningStrength" type="number | null">
+  Current cloning strength (`0`–`10`), or `null` when unset.
+</ResponseField>
+
+<ResponseField name="draftTargetLanguages" type="array">
+  The languages currently selected on the draft.
+</ResponseField>
+
+<ResponseField name="source" type="object | null">
+  `{ version, state, sourceLanguage, durationMs, sourceAssetId, cloningStrength, keyterms, media, availableExportFormats }`. `state` is `DRAFT`, `FROZEN` or `SUPERSEDED`; `durationMs` is a **string**; `media` is `{ inputFormat, containerName, audioStreamCount, video, width, height, rotationDegrees }`.
+</ResponseField>
+
+<ResponseField name="targets" type="array">
+  `{ targetId, language, state, characters, billingState, action, reservationCycle, outputAssetId }`. `characters` is a **string** or `null`; `outputAssetId` is present once the language is ready.
+</ResponseField>
+
+<ResponseField name="jobs" type="array">
+  `{ jobId, projectId, targetId, stage, state, nextPollAfterMs, errorCode, billingState }`. `nextPollAfterMs` is currently always `null`.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  Timestamp, `yyyy-MM-dd'T'HH:mm:ss`.
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  Timestamp, `yyyy-MM-dd'T'HH:mm:ss`.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/ip_...' \
+--header 'accessKey: <your_api_key>'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "projectId": "ip_...",
+    "name": "Launch video ES/FR",
+    "state": "READY",
+    "summaryState": "READY",
+    "sourceLanguage": "en",
+    "sourceDurationMs": "90000",
+    "settingsVersion": 1,
+    "draftTargetLanguages": ["es", "fr"],
+    "source": {
+      "version": 1,
+      "state": "FROZEN",
+      "durationMs": "90000",
+      "sourceAssetId": "ia_...",
+      "media": { "inputFormat": "mov,mp4,m4a,3gp,3g2,mj2", "containerName": "mov,mp4,m4a,3gp,3g2,mj2", "audioStreamCount": 1, "video": true },
+      "availableExportFormats": ["mp3", "wav", "flac", "mp4"]
+    },
+    "targets": [
+      { "targetId": "it_...", "language": "es", "state": "READY", "characters": "6000", "billingState": "SETTLED", "action": "NONE", "reservationCycle": 1, "outputAssetId": "ia_..." }
+    ],
+    "jobs": [
+      { "jobId": "ij_...", "projectId": "ip_...", "targetId": "it_...", "stage": "FETCH_AUDIO", "state": "READY", "nextPollAfterMs": null, "errorCode": null, "billingState": "SETTLED" }
+    ],
+    "createdAt": "2027-01-15T15:50:02",
+    "updatedAt": "2027-01-15T15:57:12",
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Info>
+`action` is `RETRY` only for a target in `FAILED_RELEASED`; all other states report `NONE`. `RECONCILING` on a target or job means the outcome is still being reconciled — it is not a failure and not a refund.
+</Info>
+
+### Common errors
+
+- `code = 47102`: the project does not exist **or** is not owned by your account. The API never distinguishes the two.

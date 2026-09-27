@@ -1,0 +1,101 @@
+---
+title: "Get a music job"
+api: "GET https://api.myvocal.ai/sound_clone/api/v1/music/jobs/{jobId}"
+description: "Read the progress of an arrangement or song job."
+---
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="jobId" type="string" required>
+  The job identifier returned by create, regenerate or generate.
+</ParamField>
+
+### Response
+
+<ResponseField name="jobId" type="string">
+  Job identifier.
+</ResponseField>
+
+<ResponseField name="projectId" type="string">
+  The project this job belongs to.
+</ResponseField>
+
+<ResponseField name="jobType" type="string">
+  `ARRANGEMENT` or `SONG`.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  `QUEUED`, `GENERATING`, `FINALIZING`, `SETTLING`, `READY`, `FAILED` or `RECOVERY_REQUIRED`.
+</ResponseField>
+
+<ResponseField name="displayStage" type="string">
+  Coarser user-facing stage: `QUEUED`, `CREATING_MUSIC_AND_VOCALS`, `FINALIZING_LIBRARY_ITEM` or `RECOVERY_REQUIRED`.
+</ResponseField>
+
+<ResponseField name="terminal" type="boolean">
+  `true` only for `READY`, `FAILED` and `RELEASED`.
+</ResponseField>
+
+<ResponseField name="failure" type="object | null">
+  Populated when the job failed.
+</ResponseField>
+
+<ResponseField name="attemptCount" type="number | null">
+  How many attempts this job has had. `null` for song jobs.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  Timestamp, `yyyy-MM-dd'T'HH:mm:ss`.
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  Timestamp, `yyyy-MM-dd'T'HH:mm:ss`.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/jobs/muj_...' \
+--header 'accessKey: <your_api_key>'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "jobId": "muj_...",
+    "projectId": "mup_...",
+    "jobType": "SONG",
+    "status": "GENERATING",
+    "displayStage": "CREATING_MUSIC_AND_VOCALS",
+    "terminal": false,
+    "failure": null,
+    "attemptCount": null,
+    "createdAt": "2027-01-15T15:53:20",
+    "updatedAt": "2027-01-15T15:55:01",
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+An `ARRANGEMENT` job reaching `READY` means the arrangement is complete, **not** that a song can be downloaded. Downloading requires `projectStatus = READY` with a usable `readyAsset`.
+</Warning>
+
+### Common errors
+
+- `code = 47009`: the job does not exist **or** does not belong to your account.
+- `code = 47011`: temporarily unavailable — retry with backoff.

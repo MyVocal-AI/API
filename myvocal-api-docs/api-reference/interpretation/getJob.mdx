@@ -1,0 +1,90 @@
+---
+title: "Get an interpretation job"
+api: "GET https://api.myvocal.ai/sound_clone/api/v1/interpretation/jobs/{jobId}"
+description: "Read the progress of one interpretation job, and the job list from the project detail."
+---
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="jobId" type="string" required>
+  The job identifier. Jobs are also listed in `targets`/`jobs` of the project detail.
+</ParamField>
+
+### Response
+
+<ResponseField name="jobId" type="string">
+  Job identifier.
+</ResponseField>
+
+<ResponseField name="projectId" type="string">
+  Owning project.
+</ResponseField>
+
+<ResponseField name="targetId" type="string | null">
+  The target language this job belongs to, or `null` for a project-level job.
+</ResponseField>
+
+<ResponseField name="stage" type="string">
+  The internal pipeline stage, for example `PREPARE_PROJECT`, `CREATE_LANGUAGE`, `POLL_TARGET`, `FETCH_AUDIO`, `EXPORT_AUDIO`, `COMPOSE_VIDEO` or `SETTLE`.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  `QUEUED`, `RUNNING`, `RETRY`, `RECONCILING`, `READY`, `FAILED` or `RELEASED`.
+</ResponseField>
+
+<ResponseField name="nextPollAfterMs" type="string | null">
+  Currently always `null`: the service does not publish a suggested poll interval yet. Handle `null` and use your own bounded interval.
+</ResponseField>
+
+<ResponseField name="errorCode" type="string | null">
+  Set when the job failed.
+</ResponseField>
+
+<ResponseField name="billingState" type="string">
+  `SETTLED`, `RESERVED`, `RELEASED` or `UNPRICED`, derived from the reservation and the target state.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/jobs/ij_...' \
+--header 'accessKey: <your_api_key>'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "jobId": "ij_...",
+    "projectId": "ip_...",
+    "targetId": "it_...",
+    "stage": "FETCH_AUDIO",
+    "state": "RUNNING",
+    "nextPollAfterMs": null,
+    "errorCode": null,
+    "billingState": "RESERVED",
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Info>
+`RECONCILING` means the outcome is still being determined. It is **not** a failure and **not** a release of the reservation. Only a real ledger `RELEASED` state may be described as released.
+</Info>
+
+### Common errors
+
+- `code = 47117`: the job does not exist, or it exists but is not owned by your account. The API deliberately returns the same answer for both, so it never reveals whether a job id exists.

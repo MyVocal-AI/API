@@ -1,0 +1,92 @@
+---
+title: "Sign an upload part"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/interpretation/uploads/{uploadId}/parts"
+description: "Get a presigned URL for one part of an upload session."
+---
+
+Requests a presigned URL for one part number. You then `PUT` that part's bytes directly to the returned URL.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="uploadId" type="string" required>
+  The upload session identifier.
+</ParamField>
+
+### Body
+
+<ParamField body="partNumber" type="number" required>
+  The part to sign: from `1` to `totalParts`.
+</ParamField>
+
+### Response
+
+<ResponseField name="uploadId" type="string">
+  The upload session.
+</ResponseField>
+
+<ResponseField name="partNumber" type="number">
+  The signed part.
+</ResponseField>
+
+<ResponseField name="method" type="string">
+  The HTTP method to use, normally `PUT`.
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  The presigned URL to send the part bytes to.
+</ResponseField>
+
+<ResponseField name="requiredHeaders" type="object">
+  Headers that must be included with the request to the presigned URL.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string">
+  When the presigned URL expires (15 minutes by default). Request it again for the same part if it expires.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/uploads/iu_.../parts' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{ "partNumber": 1 }'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "uploadId": "iu_...",
+    "partNumber": 1,
+    "method": "PUT",
+    "url": "https://<storage-host>/...",
+    "requiredHeaders": { "Content-Length": "16777216" },
+    "expiresAt": "2027-01-15T16:07:11",
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+The presigned URL points at object storage, **not** at MyVocal. Do not send your `accessKey` or any credential to it: the URL's signature is the authorization, and it is already scoped to this one part.
+</Warning>
+
+### Common errors
+
+- `code = 47126`: the part number is outside `1..totalParts`.
+- `code = 47124`: the upload session does not exist, is not owned by your account, or is no longer usable.
+- `code = 47127`: object storage is unavailable — retry.

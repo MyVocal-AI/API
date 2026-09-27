@@ -1,0 +1,124 @@
+---
+title: "Get upload status"
+api: "GET https://api.myvocal.ai/sound_clone/api/v1/interpretation/uploads/{uploadId}"
+description: "Check how many parts have been received and whether the source is ready."
+---
+
+Use this to resume an interrupted multipart upload and to wait for the probe to finish.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="uploadId" type="string" required>
+  The upload session identifier.
+</ParamField>
+
+### Response
+
+<ResponseField name="uploadId" type="string">
+  The upload session.
+</ResponseField>
+
+<ResponseField name="projectId" type="string">
+  Project identifier.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  `CREATED`, `UPLOADING`, `COMPLETING`, `PROBING`, `READY`, `FAILED`, `SUPERSEDED`, `EXPIRED` or `ABORTED`.
+</ResponseField>
+
+<ResponseField name="declaredSize" type="string">
+  The declared byte count, as a **string**.
+</ResponseField>
+
+<ResponseField name="actualSize" type="string | null">
+  The assembled byte count, as a **string** or `null`.
+</ResponseField>
+
+<ResponseField name="uploadedBytes" type="string">
+  Bytes received so far, as a **string**.
+</ResponseField>
+
+<ResponseField name="partSizeBytes" type="number">
+  Part size for this session.
+</ResponseField>
+
+<ResponseField name="totalParts" type="number">
+  Number of parts expected.
+</ResponseField>
+
+<ResponseField name="uploadedParts" type="array">
+  `{ partNumber, etag, size }` for each part the service has already accepted. `size` is a **string**.
+</ResponseField>
+
+<ResponseField name="errorCode" type="string | null">
+  Set when the upload failed.
+</ResponseField>
+
+<ResponseField name="sourceAssetId" type="string | null">
+  The created asset, once available.
+</ResponseField>
+
+<ResponseField name="sourceVersion" type="number">
+  The committed source version.
+</ResponseField>
+
+<ResponseField name="durationMs" type="string | null">
+  Detected duration, as a **string**.
+</ResponseField>
+
+<ResponseField name="media" type="object | null">
+  `{ inputFormat, containerName, audioStreamCount, video, width, height, rotationDegrees }`.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/uploads/iu_...' \
+--header 'accessKey: <your_api_key>'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "uploadId": "iu_...",
+    "projectId": "ip_...",
+    "state": "READY",
+    "declaredSize": "18432611",
+    "actualSize": "18432611",
+    "uploadedBytes": "18432611",
+    "partSizeBytes": 16777216,
+    "totalParts": 2,
+    "uploadedParts": [ { "partNumber": 1, "etag": "<etag-1>", "size": "16777216" } ],
+    "errorCode": null,
+    "sourceAssetId": "ia_...",
+    "sourceVersion": 1,
+    "durationMs": "90000",
+    "media": { "inputFormat": "mov,mp4,m4a,3gp,3g2,mj2", "containerName": "mov,mp4,m4a,3gp,3g2,mj2", "audioStreamCount": 1, "video": true },
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+`COMPLETING` and `PROBING` do **not** mean the source can be used for generation yet. Only `READY` does. Poll while the state is `CREATED`, `UPLOADING`, `COMPLETING` or `PROBING`.
+</Warning>
+
+### Common errors
+
+- `code = 47124`: the upload session does not exist or is not owned by your account.
+- `code = 47125`: the assembled file exceeded the limit or had no content.
+- `code = 47127`: object storage was unavailable.

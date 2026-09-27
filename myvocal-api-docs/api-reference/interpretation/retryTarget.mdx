@@ -1,0 +1,119 @@
+---
+title: "Retry a failed target"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/{projectId}/targets/{targetId}/retry"
+description: "Confirm the server's retry plan and restart the failed target language."
+---
+
+Restarts one target language that ended in `FAILED_RELEASED`. The amount fields you send are a **confirmation of the server's plan**, taken from the retry plan — not client-side pricing.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+<ParamField header="Idempotency-Key" type="string" required>
+  Unique per operation: 16–64 printable ASCII characters. `OPERATION_RETRY` is replay-safe, so a repeated POST with the same key does not create a second charge.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The project identifier.
+</ParamField>
+
+<ParamField path="targetId" type="string" required>
+  The target to retry.
+</ParamField>
+
+### Body
+
+<ParamField body="nextReservationCycle" type="number" required>
+  From the retry plan.
+</ParamField>
+
+<ParamField body="characters" type="number" required>
+  From the retry plan. Confirms the server's amount; do not compute it yourself.
+</ParamField>
+
+<ParamField body="rateVersion" type="string" required>
+  From the retry plan.
+</ParamField>
+
+### Response
+
+<ResponseField name="targetId" type="string">
+  The target identifier.
+</ResponseField>
+
+<ResponseField name="language" type="string">
+  The target language.
+</ResponseField>
+
+<ResponseField name="generationId" type="string">
+  The logical generation being retried.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  The new target state.
+</ResponseField>
+
+<ResponseField name="reservationCycle" type="number">
+  The reservation cycle used.
+</ResponseField>
+
+<ResponseField name="reservedCharacters" type="string">
+  Reserved Characters, as a **string**.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  A human-readable message.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/ip_.../targets/it_.../retry' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--header 'Idempotency-Key: 2b8f0d47c1e35a90' \
+--data '{
+  "nextReservationCycle": 2,
+  "characters": 6000,
+  "rateVersion": "interp-2026-09-27-v1"
+}'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "targetId": "it_...",
+    "language": "es",
+    "generationId": "ia_...",
+    "state": "QUEUED",
+    "reservationCycle": 2,
+    "reservedCharacters": "6000",
+    "message": "Retry accepted.",
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+Do not adjust or recompute `characters`. If the plan is no longer valid, request a new retry plan instead of guessing a new amount.
+</Warning>
+
+### Common errors
+
+- `code = 47118`: the target cannot be retried (wrong state or a stale plan).
+- `code = 47110`: not enough Characters available.
+- `code = 47117`: the target does not exist, is not part of this project, or is not owned by your account.
+- `code = 47111`: the `Idempotency-Key` was reused with a different body.
