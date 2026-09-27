@@ -13,19 +13,23 @@
  *   MYVOCAL_EXPORT_FORMAT     optional, defaults to "wav"
  *   MYVOCAL_OUTPUT_DIR        optional, defaults to the current directory
  *   MYVOCAL_MAX_WAIT_SECONDS  optional, defaults to 1800
- *   MYVOCAL_REQUEST_TIMEOUT   optional per-request timeout in seconds, defaults to 30
+ *   MYVOCAL_REQUEST_TIMEOUT   optional absolute per-request budget in seconds, defaults to 30
  *
  * Recovery: identifiers, part ETags and idempotency keys are written to the state
  * file before each create/generate request is sent, so a lost response or a restart
  * resumes the same operation. A completed upload is never re-signed or re-uploaded,
- * and an accepted generation is never re-priced or resubmitted.
+ * and an accepted generation is never re-priced or resubmitted. The saved create key
+ * stays bound to its original request body, and the upload session is bound to a
+ * non-sensitive length+SHA-256 fingerprint of the source file: if the settings or the
+ * file changed, the client stops with an explanation instead of sending new settings
+ * under an old key or assembling two different files.
  *
  * Exit codes: 0 = media produced; 1 = API/domain error; 2 = bounded wait expired;
  * 3 = finished without usable media. The accessKey is never sent to storage URLs.
  */
 
-import { randomBytes, randomInt } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createHash, randomBytes, randomInt } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -42,6 +46,8 @@ const EXPECTED_CONTENT_TYPES = {
   flac: ["audio/flac", "audio/x-flac"],
   mp4: ["video/mp4", "audio/mp4"],
 };
+/** Generic binary is accepted because the container signature is still verified below. */
+const GENERIC_CONTENT_TYPES = ["application/octet-stream", "binary/octet-stream"];
 
 class ApiError extends Error {
   constructor(code, message, details, httpStatus) {
@@ -154,7 +160,9 @@ class Client {
       throw new ApiError(-1, `refusing to store a ${contentType || "unknown"} response as media`);
     }
     const allowed = EXPECTED_CONTENT_TYPES[exportFormat] ?? [];
-    if (allowed.length && !allowed.includes(contentType)) {
+    if (allowed.length && !allowed.includes(contentType) && !GENERIC_CONTENT_TYPES.includes(contentType)) {
+      // A specific-but-wrong type is a real mismatch; a generic binary type is accepted only
+      // because the container signature below must still match the export format.
       throw new ApiError(-1, `unexpected content type ${contentType} for ${exportFormat}`);
     }
     if (payload.length === 0) throw new ApiError(-1, "media body was empty");
@@ -221,11 +229,23 @@ async function main() {
     console.log("[2/9] create project");
     // Persist the key and the request binding BEFORE sending.
     const requestBody = { name: "Quickstart dubbing", targetLanguages: targets };
-    state.createKey ??= newIdempotencyKey();
-    state.createBody = requestBody;
-    state.targetLanguages = targets;
-    saveState(config, state);
-    const created = await client.call("POST", `${INTERP}/projects`, requestBody, state.createKey);
+    let body = requestBody;
+    if (state.createKey !== undefined && state.createBody !== undefined) {
+      // The key is bound to the body it was sent with: a lost response is replayed with that
+      // original body, never with settings changed since.
+      if (JSON.stringify(state.createBody) !== JSON.stringify(requestBody)) {
+        fail(`the saved create request used targetLanguages=${JSON.stringify(state.createBody.targetLanguages)} but this run selected ${JSON.stringify(targets)}. Refusing to send the current settings with the saved Idempotency-Key; re-run with the same MYVOCAL_TARGET_LANGUAGES, or use a fresh MYVOCAL_OUTPUT_DIR for a different request (the saved state is kept).`, EXIT_API_ERROR);
+      }
+      body = state.createBody;
+    } else if (state.createKey !== undefined) {
+      fail("a create Idempotency-Key is saved without its original request body; it cannot be replayed safely, so the saved state is kept unchanged", EXIT_API_ERROR);
+    } else {
+      state.createKey = newIdempotencyKey();
+      state.createBody = requestBody;
+      state.targetLanguages = targets;
+      saveState(config, state);
+    }
+    const created = await client.call("POST", `${INTERP}/projects`, body, state.createKey);
     state.projectId = created.projectId;
     saveState(config, state);
     console.log(`  projectId=${state.projectId} state=${created.state} settingsVersion=${created.settingsVersion}`);
@@ -240,13 +260,17 @@ async function main() {
 
   console.log("[3/9] upload the source file");
   const media = readFileSync(config.mediaFile);
-  const size = statSync(config.mediaFile).size;
+  const sourceSha256 = createHash("sha256").update(media).digest("hex");
   if (!state.uploadId) {
     const session = await client.call("POST", `${INTERP}/projects/${projectId}/uploads`,
-      { filename: basename(config.mediaFile), size, contentType: "audio/wav" });
+      { filename: basename(config.mediaFile), size: media.length, contentType: "audio/wav" });
     state.uploadId = session.uploadId;
     state.partSizeBytes = session.partSizeBytes;
     state.totalParts = session.totalParts;
+    // Bind the session to the exact bytes (length + SHA-256, never the media itself) so a
+    // resume cannot silently assemble parts of two different files.
+    state.sourceBytes = media.length;
+    state.sourceSha256 = sourceSha256;
     saveState(config, state);
     console.log(`  uploadId=${state.uploadId} partSizeBytes=${state.partSizeBytes} totalParts=${state.totalParts}`);
   }
@@ -256,6 +280,9 @@ async function main() {
     // Signing is only allowed while the session is CREATED/UPLOADING: skip it.
     console.log("  upload is already complete; skipping part signing and upload");
   } else {
+    if (state.sourceSha256 !== sourceSha256 || state.sourceBytes !== media.length) {
+      throw new ApiError(-1, `the media file changed since this upload session was created (session ${state.sourceBytes} bytes sha256=${state.sourceSha256 ?? "unknown"}, file now ${media.length} bytes sha256=${sourceSha256}); the partial upload and its ids are kept — use a fresh MYVOCAL_OUTPUT_DIR to upload a different file`);
+    }
     const completedParts = state.completedParts ?? [];
     const signedNumbers = new Set(completedParts.map((part) => part.partNumber));
     for (let partNumber = 1; partNumber <= state.totalParts; partNumber += 1) {

@@ -622,9 +622,10 @@ class Handler(BaseHTTPRequestHandler):
             if not upload:
                 self._error(47124, "Upload session is not available")
                 return
-            # Real service: signing is only allowed while the session is CREATED/UPLOADING.
+            # Real service (InterpretationUploadService.signPart): signing a part of an
+            # upload that is no longer CREATED/UPLOADING is UPLOAD_PART_INVALID (47126).
             if upload["state"] not in ("CREATED", "UPLOADING"):
-                self._error(47124, "Upload session is not available")
+                self._error(47126, "One or more uploaded parts do not match this session")
                 return
             upload["state"] = "UPLOADING"
             part_number = (body or {}).get("partNumber")
@@ -646,7 +647,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._error(47124, "Upload session is not available")
                 return
             if upload["state"] == "READY":
-                self._error(47124, "Upload session is not available")
+                # Real complete/claim return the terminal response when the upload is already
+                # READY (InterpretationUploadService.complete -> claim().terminal), so a lost
+                # complete response is recoverable by replaying it.
+                self._success(self._upload_ready_response(upload))
                 return
             parts = (body or {}).get("parts")
             if not isinstance(parts, list) or len(parts) != upload["totalParts"]:
@@ -659,10 +663,7 @@ class Handler(BaseHTTPRequestHandler):
             project["sourceState"] = "FROZEN"
             project["durationMs"] = "90000"
             project["state"] = "PROCESSING"
-            self._success({"uploadId": upload["uploadId"], "projectId": upload["projectId"],
-                           "state": "READY", "errorCode": None, "sourceAssetId": "ia_stub",
-                           "sourceVersion": 1, "durationMs": "90000",
-                           "media": self._media(), "requestId": "stub-request"})
+            self._success(self._upload_ready_response(upload))
             return
 
         match = re.fullmatch(r"/uploads/([^/]+)", rest)
@@ -896,6 +897,13 @@ class Handler(BaseHTTPRequestHandler):
     def _media(self):
         return {"inputFormat": "wav", "containerName": "wav", "audioStreamCount": 1,
                 "video": False, "width": None, "height": None, "rotationDegrees": None}
+
+    def _upload_ready_response(self, upload):
+        """The terminal CompleteUploadResponse for an upload that is READY."""
+        return {"uploadId": upload["uploadId"], "projectId": upload["projectId"],
+                "state": "READY", "errorCode": None, "sourceAssetId": "ia_stub",
+                "sourceVersion": 1, "durationMs": "90000",
+                "media": self._media(), "requestId": "stub-request"}
 
     def _detail(self, session, project_id):
         project = session["projects"][project_id]

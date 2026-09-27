@@ -14,9 +14,11 @@
  *   MYVOCAL_REQUEST_TIMEOUT   optional per-request timeout in seconds, defaults to 30
  *
  * Recovery: the idempotency key and the exact request body of each create/generate
- * call are written to the state file before the request is sent. A project that
- * already reached READY skips quote/generate; an in-flight generation is replayed
- * with its original key and quote instead of being re-priced.
+ * call are written to the state file before the request is sent. A saved create key
+ * stays bound to its original request body, so changed settings are reported instead
+ * of being sent under an old key. A project that already reached READY skips
+ * quote/generate; an in-flight generation is replayed with its original key and quote
+ * instead of being re-priced.
  *
  * Exit codes: 0 = a media file was produced; 1 = API/domain error; 2 = bounded wait
  * expired. Characters are parsed with BigInt so values above 2^53 stay exact.
@@ -214,10 +216,24 @@ async function main() {
       vocalStyle: "BRIGHT_ENERGETIC",
     };
     // Persist the key and the request binding BEFORE sending.
-    state.createKey ??= newIdempotencyKey();
-    state.createBody = requestBody;
-    saveState(config, state);
-    const created = await client.call("POST", `${MUSIC_PATH}/projects`, requestBody, state.createKey);
+    let body = requestBody;
+    if (state.createKey !== undefined && state.createBody !== undefined) {
+      // The key is bound to the body it was sent with: a lost response is replayed with that
+      // original body, never with settings changed since.
+      if (JSON.stringify(state.createBody) !== JSON.stringify(requestBody)) {
+        console.error(`the saved create request used durationSec=${state.createBody.durationSec}/vocalLanguage=${state.createBody.vocalLanguage} but this run would send durationSec=${requestBody.durationSec}/vocalLanguage=${requestBody.vocalLanguage}. Refusing to send the current settings with the saved Idempotency-Key; re-run with the original settings, or use a fresh MYVOCAL_OUTPUT_DIR for a different request (the saved state is kept).`);
+        process.exit(1);
+      }
+      body = state.createBody;
+    } else if (state.createKey !== undefined) {
+      console.error("a create Idempotency-Key is saved without its original request body; it cannot be replayed safely, so the saved state is kept unchanged");
+      process.exit(1);
+    } else {
+      state.createKey = newIdempotencyKey();
+      state.createBody = requestBody;
+      saveState(config, state);
+    }
+    const created = await client.call("POST", `${MUSIC_PATH}/projects`, body, state.createKey);
     state.projectId = created.projectId;
     saveState(config, state);
     console.log(`  projectId=${state.projectId} status=${created.projectStatus}`);

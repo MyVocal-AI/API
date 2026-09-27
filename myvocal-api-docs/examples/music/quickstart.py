@@ -10,14 +10,15 @@ Environment:
     MYVOCAL_OUTPUT_DIR        optional, defaults to the current directory
     MYVOCAL_MAX_WAIT_SECONDS  optional, defaults to 900
     MYVOCAL_DURATION_SEC      optional, defaults to 90
-    MYVOCAL_REQUEST_TIMEOUT   optional per-request timeout in seconds, defaults to 30
+    MYVOCAL_REQUEST_TIMEOUT   optional absolute per-request budget in seconds, defaults to 30
 
 Recovery: the idempotency key and the exact request body of each create/generate
 call are written to the state file before the request is sent, so a lost response
-or a restart resumes the same operation. A project that already reached READY skips
-quote/generate entirely; an in-flight generation is replayed with its original key
-and quote instead of being re-priced. The state file never contains the API key,
-a signed URL or customer content.
+or a restart resumes the same operation. A saved create key stays bound to its
+original request body, so changed settings are reported instead of being sent under
+an old key. A project that already reached READY skips quote/generate entirely; an
+in-flight generation is replayed with its original key and quote instead of being
+re-priced. The state file never contains the API key, a signed URL or customer content.
 
 Exit codes: 0 = a media file was produced; 1 = API/domain error; 2 = bounded wait
 expired (resource ids are printed).
@@ -54,6 +55,10 @@ class ApiError(RuntimeError):
 
 class TimeoutFailure(RuntimeError):
     pass
+
+
+class RequestTimeout(RuntimeError):
+    """A request exceeded its absolute time budget (MYVOCAL_REQUEST_TIMEOUT)."""
 
 
 def as_int(value):
@@ -93,11 +98,25 @@ class Client:
         self.config = config
 
     def _send(self, request, what):
+        """One HTTP request under one absolute time budget. Network failures stay failures.
+
+        A socket timeout only bounds one idle wait; a response that keeps trickling bytes
+        would extend it indefinitely, so the body is read against a real deadline. Header
+        lookup stays on HTTPMessage, which is case-insensitive for Content-Type.
+        """
+        timeout = self.config.request_timeout
+        deadline = time.monotonic() + timeout
         try:
-            with urllib.request.urlopen(request, timeout=self.config.request_timeout) as response:
-                return response.status, dict(response.headers), response.read()
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return response.status, response.headers, _read_bounded(response, deadline, timeout, what)
         except urllib.error.HTTPError as failure:
-            return failure.code, dict(failure.headers), failure.read()
+            try:
+                body = _read_bounded(failure, deadline, timeout, what)
+            except RequestTimeout as expired:
+                raise ApiError(-1, str(expired), None, None)
+            return failure.code, failure.headers, body
+        except RequestTimeout as expired:
+            raise ApiError(-1, str(expired), None, None)
         except (urllib.error.URLError, OSError, http.client.HTTPException) as failure:
             # A dropped/reset connection is a normal transport failure, not a crash.
             raise ApiError(-1, "%s failed: %s (re-run to resume the same operation)" % (what, failure),
@@ -158,6 +177,55 @@ class Client:
         if not looks_like_mpeg:
             raise ApiError(-1, "payload does not start with an MPEG audio signature")
         return content_type, payload
+
+
+def _socket_for(reader):
+    """Best-effort access to the socket behind a urllib response or an HTTPError reader."""
+    for candidate in (reader, getattr(reader, "fp", None),
+                      getattr(getattr(reader, "fp", None), "fp", None)):
+        if candidate is None:
+            continue
+        for holder in (getattr(candidate, "raw", None), candidate):
+            sock = getattr(holder, "_sock", None)
+            if sock is not None:
+                return sock
+    return None
+
+
+def _read_bounded(reader, deadline, timeout, what):
+    """Read a whole body under one absolute deadline.
+
+    The remaining budget is re-checked before every chunk and re-applied as the socket
+    timeout, and only single-receive reads (`read1`) are used: a plain `read(n)` would keep
+    blocking until n bytes even while the peer drips one byte at a time.
+    """
+    read_some = getattr(reader, "read1", None) or getattr(getattr(reader, "fp", None), "read1", None)
+    if read_some is None:
+        read_some = reader.read
+    chunks = []
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RequestTimeout("%s timed out after %.0fs" % (what, timeout))
+        sock = _socket_for(reader)
+        if sock is not None:
+            try:
+                sock.settimeout(max(0.05, remaining))
+            except (OSError, ValueError):
+                pass
+        try:
+            chunk = read_some(65536)
+        except (TimeoutError, OSError) as failure:
+            detail = str(failure) or failure.__class__.__name__
+            lowered = detail.lower()
+            if "timeout" in lowered or "timed out" in lowered:
+                raise RequestTimeout("%s timed out after %.0fs" % (what, timeout))
+            raise RequestTimeout("%s failed while reading the response after %.0fs (%s)"
+                                 % (what, timeout, detail))
+        if not chunk:
+            break
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def jittered_delay(next_poll_after_ms):
@@ -246,9 +314,26 @@ def main():
         }
         # Persist the key and the request binding BEFORE sending, so a lost response can
         # be resumed with the same identity instead of creating a second project.
-        state["createKey"] = state.get("createKey") or new_idempotency_key()
-        state["createBody"] = request_body
-        save_state(config, state)
+        saved_key, saved_body = state.get("createKey"), state.get("createBody")
+        if saved_key and saved_body:
+            # The saved key is bound to the body it was sent with. A response that never
+            # arrived must be replayed with that original body, never with new settings.
+            if saved_body != request_body:
+                sys.exit("the saved create request used durationSec=%s/vocalLanguage=%s but this "
+                         "run would send durationSec=%s/vocalLanguage=%s. Refusing to send the "
+                         "current settings with the saved Idempotency-Key; re-run with the original "
+                         "MYVOCAL_DURATION_SEC/MYVOCAL_VOCAL_LANGUAGE, or use a fresh "
+                         "MYVOCAL_OUTPUT_DIR for a different request (the saved state is kept)."
+                         % (saved_body.get("durationSec"), saved_body.get("vocalLanguage"),
+                            request_body.get("durationSec"), request_body.get("vocalLanguage")))
+            request_body = saved_body
+        elif saved_key:
+            sys.exit("a create Idempotency-Key is saved without its original request body; it "
+                     "cannot be replayed safely, so the saved state is kept unchanged")
+        else:
+            state["createKey"] = new_idempotency_key()
+            state["createBody"] = request_body
+            save_state(config, state)
         created = client.call("POST", MUSIC_PATH + "/projects", request_body, state["createKey"])
         state["projectId"] = created["projectId"]
         save_state(config, state)

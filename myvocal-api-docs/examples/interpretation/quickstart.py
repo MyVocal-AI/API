@@ -12,12 +12,16 @@ Environment:
     MYVOCAL_EXPORT_FORMAT     optional, defaults to "wav"
     MYVOCAL_OUTPUT_DIR        optional, defaults to the current directory
     MYVOCAL_MAX_WAIT_SECONDS  optional, defaults to 1800
-    MYVOCAL_REQUEST_TIMEOUT   optional per-request timeout in seconds, defaults to 30
+    MYVOCAL_REQUEST_TIMEOUT   optional absolute per-request budget in seconds, defaults to 30
 
 Recovery: identifiers and idempotency keys are written to the state file *before*
 each create/generate request is sent, so a lost response or a restart resumes the
-same operation instead of starting a second one. The state file never contains the
-API key, a signed URL or customer media.
+same operation instead of starting a second one. The saved create key stays bound to
+its original request body, and the upload session is bound to a non-sensitive
+length+SHA-256 fingerprint of the source file: if the settings or the file changed,
+the client stops with an explanation instead of sending new settings under an old key
+or assembling two different files. The state file never contains the API key, a
+signed URL or customer media.
 
 Exit codes: 0 = a media file was produced; 1 = API/domain error; 2 = bounded wait
 expired (resource ids are printed); 3 = the run finished without usable media.
@@ -27,6 +31,7 @@ reserves Characters per target language. The presigned part URLs point at object
 storage; the accessKey is never sent to them.
 """
 
+import hashlib
 import http.client
 import json
 import os
@@ -58,6 +63,9 @@ EXPECTED_CONTENT_TYPES = {
     "flac": ("audio/flac", "audio/x-flac"),
     "mp4": ("video/mp4", "audio/mp4"),
 }
+# Generic binary is accepted because the payload signature is verified separately:
+# object storage can serve valid media as application/octet-stream.
+GENERIC_CONTENT_TYPES = ("application/octet-stream", "binary/octet-stream")
 
 
 class ApiError(RuntimeError):
@@ -73,6 +81,10 @@ class ApiError(RuntimeError):
 
 class TimeoutFailure(RuntimeError):
     pass
+
+
+class RequestTimeout(RuntimeError):
+    """A request exceeded its absolute time budget (MYVOCAL_REQUEST_TIMEOUT)."""
 
 
 def as_int(value):
@@ -119,12 +131,25 @@ class Client:
     # ------------------------------------------------------------------ transport
 
     def _send(self, request, what):
-        """One HTTP request with a finite timeout. Network failures stay failures."""
+        """One HTTP request under one absolute time budget. Network failures stay failures.
+
+        A socket timeout only bounds one idle wait; a response that keeps trickling bytes
+        would extend it indefinitely, so the body is read against a real deadline. Header
+        lookup stays on HTTPMessage, which is case-insensitive for Content-Type/ETag.
+        """
+        timeout = self.config.request_timeout
+        deadline = time.monotonic() + timeout
         try:
-            with urllib.request.urlopen(request, timeout=self.config.request_timeout) as response:
-                return response.status, dict(response.headers), response.read()
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return response.status, response.headers, _read_bounded(response, deadline, timeout, what)
         except urllib.error.HTTPError as failure:
-            return failure.code, dict(failure.headers), failure.read()
+            try:
+                body = _read_bounded(failure, deadline, timeout, what)
+            except RequestTimeout as expired:
+                raise ApiError(-1, str(expired), None, None)
+            return failure.code, failure.headers, body
+        except RequestTimeout as expired:
+            raise ApiError(-1, str(expired), None, None)
         except (urllib.error.URLError, OSError, http.client.HTTPException) as failure:
             # A dropped/reset connection is a normal transport failure, not a crash.
             raise ApiError(-1, "%s failed: %s (re-run to resume the same operation)" % (what, failure),
@@ -184,7 +209,9 @@ class Client:
         if is_json(content_type) or content_type.startswith("text/"):
             raise ApiError(-1, "refusing to store a %s response as media" % (content_type or "unknown"))
         allowed = EXPECTED_CONTENT_TYPES.get(export_format, ())
-        if allowed and content_type not in allowed:
+        if allowed and content_type not in allowed and content_type not in GENERIC_CONTENT_TYPES:
+            # A specific-but-wrong type is a real mismatch; a generic binary type is accepted
+            # only because the container signature below must still match the export format.
             raise ApiError(-1, "unexpected content type %s for %s" % (content_type, export_format))
         if not payload:
             raise ApiError(-1, "media body was empty")
@@ -207,6 +234,66 @@ def _looks_like_media(payload, export_format):
     if export_format == "mp4":
         return len(head) >= 8 and head[4:8] == b"ftyp"
     return any(head.startswith(signature) for signature in signatures)
+
+
+def source_fingerprint(path):
+    """Non-sensitive content binding: streamed byte length + SHA-256 (never the media)."""
+    digest = hashlib.sha256()
+    size = 0
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+            size += len(block)
+    return {"size": size, "sha256": digest.hexdigest()}
+
+
+def _socket_for(reader):
+    """Best-effort access to the socket behind a urllib response or an HTTPError reader."""
+    for candidate in (reader, getattr(reader, "fp", None),
+                      getattr(getattr(reader, "fp", None), "fp", None)):
+        if candidate is None:
+            continue
+        for holder in (getattr(candidate, "raw", None), candidate):
+            sock = getattr(holder, "_sock", None)
+            if sock is not None:
+                return sock
+    return None
+
+
+def _read_bounded(reader, deadline, timeout, what):
+    """Read a whole body under one absolute deadline.
+
+    The remaining budget is re-checked before every chunk and re-applied as the socket
+    timeout, and only single-receive reads (`read1`) are used: a plain `read(n)` would keep
+    blocking until n bytes even while the peer drips one byte at a time.
+    """
+    read_some = getattr(reader, "read1", None) or getattr(getattr(reader, "fp", None), "read1", None)
+    if read_some is None:
+        read_some = reader.read
+    chunks = []
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RequestTimeout("%s timed out after %.0fs" % (what, timeout))
+        sock = _socket_for(reader)
+        if sock is not None:
+            try:
+                sock.settimeout(max(0.05, remaining))
+            except (OSError, ValueError):
+                pass
+        try:
+            chunk = read_some(65536)
+        except (TimeoutError, OSError) as failure:
+            detail = str(failure) or failure.__class__.__name__
+            lowered = detail.lower()
+            if "timeout" in lowered or "timed out" in lowered:
+                raise RequestTimeout("%s timed out after %.0fs" % (what, timeout))
+            raise RequestTimeout("%s failed while reading the response after %.0fs (%s)"
+                                 % (what, timeout, detail))
+        if not chunk:
+            break
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def jittered_delay(next_poll_after_ms):
@@ -269,10 +356,25 @@ def main():
         # Persist the key and the request binding BEFORE sending, so a lost response
         # can be resumed with the same identity instead of creating a second project.
         request_body = {"name": "Quickstart dubbing", "targetLanguages": selected}
-        state["createKey"] = state.get("createKey") or new_idempotency_key()
-        state["createBody"] = request_body
-        state["targetLanguages"] = selected
-        save_state(config, state)
+        saved_key, saved_body = state.get("createKey"), state.get("createBody")
+        if saved_key and saved_body:
+            # The saved key is bound to the body it was sent with. A response that never
+            # arrived must be replayed with that original body, never with new settings.
+            if saved_body != request_body:
+                sys.exit("the saved create request used targetLanguages=%s but this run selected "
+                         "%s. Refusing to send the current settings with the saved Idempotency-Key; "
+                         "re-run with the same MYVOCAL_TARGET_LANGUAGES, or use a fresh "
+                         "MYVOCAL_OUTPUT_DIR for a different request (the saved state is kept)."
+                         % (saved_body.get("targetLanguages"), selected))
+            request_body = saved_body
+        elif saved_key:
+            sys.exit("a create Idempotency-Key is saved without its original request body; it "
+                     "cannot be replayed safely, so the saved state is kept unchanged")
+        else:
+            state["createKey"] = new_idempotency_key()
+            state["createBody"] = request_body
+            state["targetLanguages"] = selected
+            save_state(config, state)
         created = client.call("POST", INTERP + "/projects", request_body, state["createKey"])
         state["projectId"] = created["projectId"]
         save_state(config, state)
@@ -289,14 +391,18 @@ def main():
     project_id = state["projectId"]
 
     print("[3/9] upload the source file")
-    size = os.path.getsize(config.media_file)
     if not state.get("uploadId"):
+        fingerprint = source_fingerprint(config.media_file)
         session = client.call("POST", "%s/projects/%s/uploads" % (INTERP, project_id),
                               {"filename": os.path.basename(config.media_file),
-                               "size": size, "contentType": "audio/wav"})
+                               "size": fingerprint["size"], "contentType": "audio/wav"})
         state["uploadId"] = session["uploadId"]
         state["partSizeBytes"] = session["partSizeBytes"]
         state["totalParts"] = session["totalParts"]
+        # Bind the session to the exact bytes (length + SHA-256, never the media itself) so a
+        # resume cannot silently assemble parts of two different files.
+        state["sourceBytes"] = fingerprint["size"]
+        state["sourceSha256"] = fingerprint["sha256"]
         save_state(config, state)
         print("  uploadId=%s partSizeBytes=%s totalParts=%s" % (
             state["uploadId"], state["partSizeBytes"], state["totalParts"]))
@@ -310,6 +416,13 @@ def main():
     else:
         with open(config.media_file, "rb") as handle:
             media = handle.read()
+        media_sha256 = hashlib.sha256(media).hexdigest()
+        if state.get("sourceSha256") != media_sha256 or state.get("sourceBytes") != len(media):
+            raise ApiError(-1, "the media file changed since this upload session was created "
+                               "(session %s bytes sha256=%s, file now %s bytes sha256=%s); the partial "
+                               "upload and its ids are kept — use a fresh MYVOCAL_OUTPUT_DIR to "
+                               "upload a different file"
+                           % (state.get("sourceBytes"), state.get("sourceSha256"), len(media), media_sha256))
         completed_parts = state.get("completedParts") or []
         signed_numbers = {part["partNumber"] for part in completed_parts}
         for part_number in range(1, state["totalParts"] + 1):
