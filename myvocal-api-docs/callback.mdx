@@ -53,4 +53,21 @@ The status of this request
     "webhookType":"TRAIN_COVER_SPEAKER",    
     "status":"FAILURE",  
     "summary":"Clone training failed."
-}
+}```
+
+## Text-to-Music and Interpretation
+
+The callback and `webhookId` mechanism on this page applies to the AI Cover flows listed above (`TRAIN_COVER_SPEAKER`, `EDIT_COVER_SPEAKER`, `COVER_SONG`).
+
+**Text-to-Music and Interpretation do not use callbacks and never call your webhook.** They are poll-based: create the project, then poll the project/job endpoints until the resource reaches a terminal state. Neither product takes a callback URL parameter, and neither returns a `webhookId`.
+
+If you are integrating Text-to-Music or Interpretation, implement polling instead — see [Async jobs, polling and retries](/guides/async-jobs-and-retries).
+
+<CardGroup cols={2}>
+  <Card title="Text-to-Music quickstart" icon="music" href="/guides/music-quickstart">
+    Poll the project until `projectStatus` is `READY`, then download the MP3.
+  </Card>
+  <Card title="Interpretation quickstart" icon="language" href="/guides/interpretation-quickstart">
+    Poll the project until every target is `READY`, then play or export it.
+  </Card>
+</CardGroup>

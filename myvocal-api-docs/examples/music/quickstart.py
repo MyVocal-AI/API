@@ -1,0 +1,624 @@
+#!/usr/bin/env python3
+"""MyVocal Text-to-Music quickstart (Python, standard library only).
+
+Flow: capabilities -> create project -> poll arrangement -> quote -> generate
+      -> poll song -> playback URL -> download MP3
+
+Environment:
+    MYVOCAL_API_KEY           required
+    MYVOCAL_API_BASE_URL      optional, defaults to https://api.myvocal.ai
+    MYVOCAL_OUTPUT_DIR        optional, defaults to the current directory
+    MYVOCAL_MAX_WAIT_SECONDS  optional, defaults to 900
+    MYVOCAL_DURATION_SEC      optional, defaults to 90
+    MYVOCAL_REQUEST_TIMEOUT   optional absolute per-request budget in seconds, defaults to 30
+
+Recovery: the idempotency key and the exact request body of each create/generate
+call are written to the state file before the request is sent, so a lost response
+or a restart resumes the same operation. A saved create key stays bound to its
+original request body, so changed settings are reported instead of being sent under
+an old key. A project that already reached READY skips quote/generate entirely; an
+in-flight generation is replayed with its original key and quote instead of being
+re-priced. The state file never contains the API key, a signed URL or customer content.
+
+Exit codes: 0 = a media file was produced; 1 = API/domain error; 2 = bounded wait
+expired (resource ids are printed).
+
+Safety: running this against the production host performs REAL, BILLABLE work and
+consumes Characters. Use the local stub for development.
+"""
+
+import http.client
+import json
+import os
+import random
+import secrets
+import socket
+import string
+import sys
+import threading
+import time
+import urllib.error
+import urllib.request
+
+MUSIC_PATH = "/sound_clone/api/v1/music"
+EXIT_OK, EXIT_API_ERROR, EXIT_TIMEOUT = 0, 1, 2
+
+
+class ApiError(RuntimeError):
+    """A non-success MyVocal response, carrying the documented error fields."""
+
+    def __init__(self, code, message, details=None, http_status=None):
+        super().__init__("MyVocal error code=%s message=%s" % (code, message))
+        self.code = code
+        self.message = message
+        self.details = details or {}
+        self.http_status = http_status
+
+
+class TimeoutFailure(RuntimeError):
+    pass
+
+
+class RequestTimeout(RuntimeError):
+    """A request exceeded its absolute time budget (MYVOCAL_REQUEST_TIMEOUT)."""
+
+
+def as_int(value):
+    """Characters arrive as JSON strings; parse them before any arithmetic."""
+    return None if value is None else int(value)
+
+
+def is_json(content_type):
+    return "json" in (content_type or "").lower()
+
+
+class Config:
+    def __init__(self):
+        self.base_url = os.environ.get("MYVOCAL_API_BASE_URL", "https://api.myvocal.ai").rstrip("/")
+        self.api_key = os.environ.get("MYVOCAL_API_KEY", "")
+        self.output_dir = os.environ.get("MYVOCAL_OUTPUT_DIR", ".")
+        self.max_wait = float(os.environ.get("MYVOCAL_MAX_WAIT_SECONDS", "900"))
+        self.duration_sec = int(os.environ.get("MYVOCAL_DURATION_SEC", "90"))
+        self.vocal_language = os.environ.get("MYVOCAL_VOCAL_LANGUAGE", "")
+        self.request_timeout = float(os.environ.get("MYVOCAL_REQUEST_TIMEOUT", "30"))
+        if not self.api_key:
+            sys.exit("MYVOCAL_API_KEY is required")
+        os.makedirs(self.output_dir, exist_ok=True)
+
+    @property
+    def state_path(self):
+        return os.path.join(self.output_dir, "music_state.json")
+
+
+def new_idempotency_key():
+    alphabet = string.ascii_letters + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(32))
+
+
+class Client:
+    def __init__(self, config):
+        self.config = config
+
+    def _send(self, request, what):
+        """One HTTP request under one absolute time budget. Network failures stay failures.
+
+        The budget covers the whole exchange: connecting, the status line and headers, and the
+        body. A socket timeout alone only bounds one receive, so a peer that keeps trickling
+        header or body bytes could hold the call open forever: the live socket is shut down at
+        the deadline (_RequestDeadline) and the body is read against the same deadline
+        (_read_bounded). Header lookup stays on HTTPMessage, which is case-insensitive for
+        Content-Type.
+        """
+        timeout = self.config.request_timeout
+        deadline = time.monotonic() + timeout
+        tracking = _RequestDeadline(timeout)
+        tracking.start()
+        try:
+            try:
+                response = _open_bounded(request, timeout, tracking)
+            except urllib.error.HTTPError as failure:
+                try:
+                    return failure.code, failure.headers, _read_bounded(failure, deadline, timeout,
+                                                                        what, tracking)
+                finally:
+                    failure.close()
+            try:
+                return response.status, response.headers, _read_bounded(
+                    response, deadline, timeout, what, tracking)
+            finally:
+                response.close()
+        except RequestTimeout as expired:
+            raise ApiError(-1, str(expired), None, None)
+        except (urllib.error.URLError, OSError, http.client.HTTPException) as failure:
+            if time.monotonic() >= deadline:
+                # The deadline shut the request socket down, so this is a timeout, not a drop.
+                raise ApiError(-1, "%s timed out after %.0fs" % (what, timeout), None, None)
+            # A dropped/reset connection is a normal transport failure, not a crash.
+            raise ApiError(-1, "%s failed: %s (re-run to resume the same operation)" % (what, failure),
+                           None, None)
+        finally:
+            tracking.stop()
+
+    def call(self, method, path, body=None, idempotency_key=None):
+        """Success requires BOTH a 2xx status and JSON code == 1."""
+        headers = {"accessKey": self.config.api_key, "Accept": "application/json"}
+        data = None
+        if body is not None:
+            data = json.dumps(body).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+        if idempotency_key:
+            headers["Idempotency-Key"] = idempotency_key
+
+        request = urllib.request.Request(self.config.base_url + path, data=data,
+                                         headers=headers, method=method)
+        status, response_headers, raw = self._send(request, "request %s %s" % (method, path))
+        content_type = response_headers.get("Content-Type", "")
+
+        if not (200 <= status < 300):
+            # A non-2xx status is a failure even when the body carries code == 1.
+            raise ApiError(-1, "HTTP %s for %s %s" % (status, method, path), None, status)
+        if not is_json(content_type):
+            raise ApiError(-1, "expected JSON but received %s (HTTP %s)" % (content_type, status),
+                           None, status)
+        payload = json.loads(raw.decode("utf-8"))
+        if payload.get("code") != 1:
+            raise ApiError(payload.get("code"), payload.get("message"), payload.get("data"), status)
+        return payload.get("data") or {}
+
+    def download_audio(self, path):
+        """The download endpoint streams audio on success and JSON on failure.
+
+        An HTML/JSON error page, an empty body or a non-MPEG payload is reported as a
+        failure instead of being written to an .mp3 file.
+        """
+        request = urllib.request.Request(self.config.base_url + path,
+                                         headers={"accessKey": self.config.api_key,
+                                                  "Accept": "audio/mpeg"},
+                                         method="GET")
+        status, response_headers, payload = self._send(request, "audio download")
+        content_type = (response_headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if not (200 <= status < 300):
+            raise ApiError(-1, "HTTP %s for the audio download" % status, None, status)
+        if is_json(content_type):
+            # Documented: a rejected download returns the normal JSON error envelope.
+            error = json.loads(payload.decode("utf-8"))
+            raise ApiError(error.get("code"), error.get("message"), error.get("data"), status)
+        if content_type.startswith("text/"):
+            raise ApiError(-1, "refusing to store a %s response as audio" % content_type)
+        if not content_type.startswith("audio/"):
+            raise ApiError(-1, "unexpected content type %s for the audio download" % content_type)
+        if not payload:
+            raise ApiError(-1, "audio body was empty")
+        if not _looks_like_mpeg(payload):
+            raise ApiError(-1, "payload does not contain a valid MPEG audio frame")
+        return content_type, payload
+
+
+def _socket_for(reader):
+    """Best-effort access to the socket behind a urllib response or an HTTPError reader."""
+    for candidate in (reader, getattr(reader, "fp", None),
+                      getattr(getattr(reader, "fp", None), "fp", None)):
+        if candidate is None:
+            continue
+        for holder in (getattr(candidate, "raw", None), candidate):
+            sock = getattr(holder, "_sock", None)
+            if sock is not None:
+                return sock
+    return None
+
+
+class _RequestDeadline:
+    """Shuts one request's live socket down when its absolute budget expires.
+
+    urllib applies `timeout` only as a per-receive socket timeout. A peer that keeps trickling
+    bytes while the status line or the headers are still incomplete never trips it, so the
+    call can block far past the budget. This keeps a reference to the request socket and
+    closes it at the deadline, which makes the blocked read raise and lets the caller report a
+    timeout and release the connection instead of waiting forever.
+    """
+
+    def __init__(self, timeout):
+        self._lock = threading.Lock()
+        self._socket = None
+        self._expired = False
+        self._timer = threading.Timer(timeout, self._expire)
+
+    @property
+    def expired(self):
+        return self._expired
+
+    def start(self):
+        self._timer.daemon = True
+        self._timer.start()
+
+    def stop(self):
+        self._timer.cancel()
+
+    def track(self, sock):
+        """Register the connected socket; close it at once if the budget already expired."""
+        with self._lock:
+            expired = self._expired
+            if not expired:
+                self._socket = sock
+        if expired:
+            _close_socket(sock)
+
+    def _expire(self):
+        with self._lock:
+            self._expired = True
+            sock, self._socket = self._socket, None
+        _close_socket(sock)
+
+
+def _close_socket(sock):
+    """Best-effort shutdown/close of the in-flight socket from the deadline timer."""
+    if sock is None:
+        return
+    try:
+        sock.shutdown(socket.SHUT_RDWR)
+    except OSError:
+        pass
+    try:
+        sock.close()
+    except OSError:
+        pass
+
+
+def _tracked_connection(base, tracking):
+    """An HTTP(S) connection that registers its final socket for deadline enforcement.
+
+    Tracking happens after `connect()` completes, so an HTTPS socket is the wrapped TLS
+    socket and a proxy tunnel is already established.
+    """
+
+    class TrackedConnection(base):
+        def connect(self):
+            super().connect()
+            tracking.track(self.sock)
+
+    return TrackedConnection
+
+
+class _DeadlineHTTPHandler(urllib.request.HTTPHandler):
+    def __init__(self, tracking):
+        super().__init__()
+        self._tracking = tracking
+
+    def http_open(self, request):
+        return self.do_open(_tracked_connection(http.client.HTTPConnection, self._tracking), request)
+
+
+class _DeadlineHTTPSHandler(urllib.request.HTTPSHandler):
+    def __init__(self, tracking, context=None):
+        super().__init__(context=context)
+        self._tracking = tracking
+
+    def https_open(self, request):
+        return self.do_open(_tracked_connection(http.client.HTTPSConnection, self._tracking), request,
+                            context=self._context)
+
+
+def _open_bounded(request, timeout, tracking):
+    """urlopen under a budget that also covers the response status line and headers."""
+    opener = urllib.request.build_opener(_DeadlineHTTPHandler(tracking),
+                                         _DeadlineHTTPSHandler(tracking))
+    return opener.open(request, timeout=timeout)
+
+
+def _read_bounded(reader, deadline, timeout, what, tracking=None):
+    """Read a whole body under one absolute deadline.
+
+    The remaining budget is re-checked before every chunk and re-applied as the socket
+    timeout, and only single-receive reads (`read1`) are used: a plain `read(n)` would keep
+    blocking until n bytes even while the peer drips one byte at a time. When the deadline
+    timer already shut the socket down, a body that ends at EOF must still be reported as a
+    timeout instead of a truncated success.
+    """
+    read_some = getattr(reader, "read1", None) or getattr(getattr(reader, "fp", None), "read1", None)
+    if read_some is None:
+        read_some = reader.read
+    chunks = []
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RequestTimeout("%s timed out after %.0fs" % (what, timeout))
+        sock = _socket_for(reader)
+        if sock is not None:
+            try:
+                sock.settimeout(max(0.05, remaining))
+            except (OSError, ValueError):
+                pass
+        try:
+            chunk = read_some(65536)
+        except (TimeoutError, OSError) as failure:
+            detail = str(failure) or failure.__class__.__name__
+            lowered = detail.lower()
+            if "timeout" in lowered or "timed out" in lowered:
+                raise RequestTimeout("%s timed out after %.0fs" % (what, timeout))
+            raise RequestTimeout("%s failed while reading the response after %.0fs (%s)"
+                                 % (what, timeout, detail))
+        if not chunk:
+            break
+        chunks.append(chunk)
+    if tracking is not None and tracking.expired:
+        raise RequestTimeout("%s timed out after %.0fs" % (what, timeout))
+    return b"".join(chunks)
+
+
+# MPEG audio frame tables (MPEG 1 / MPEG 2 / MPEG 2.5). A real MP3 is accepted only when the
+# payload actually starts with a decodable frame (possibly after an ID3v2 tag), so a WAV file or
+# arbitrary bytes that merely contain a 0xFF byte are not mistaken for MP3.
+_MPEG_BITRATES = {
+    (3, 3): (32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448),
+    (3, 2): (32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384),
+    (3, 1): (32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320),
+    (2, 3): (32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256),
+    (2, 2): (8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160),
+    (2, 1): (8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160),
+}
+_MPEG_SAMPLE_RATES = {3: (44100, 48000, 32000), 2: (22050, 24000, 16000), 0: (11025, 12000, 8000)}
+
+
+def _mpeg_frame_length(payload, offset):
+    """Byte length of a valid MPEG audio frame at `offset`, or None.
+
+    Version, layer, bitrate and sample-rate fields must all be valid, which rejects arbitrary
+    bytes that only happen to contain a sync pattern.
+    """
+    if offset + 4 > len(payload):
+        return None
+    b0, b1, b2, b3 = payload[offset], payload[offset + 1], payload[offset + 2], payload[offset + 3]
+    if b0 != 0xFF or (b1 & 0xE0) != 0xE0:
+        return None
+    version = (b1 >> 3) & 0x03          # 0 = MPEG 2.5, 1 = reserved, 2 = MPEG 2, 3 = MPEG 1
+    layer = (b1 >> 1) & 0x03            # 0 = reserved, 1 = Layer III, 2 = Layer II, 3 = Layer I
+    if version == 1 or layer == 0:
+        return None
+    bitrate_index = (b2 >> 4) & 0x0F
+    sample_index = (b2 >> 2) & 0x03
+    if bitrate_index in (0, 15) or sample_index == 3 or (b3 & 0x03) == 2:
+        return None
+    bitrate = _MPEG_BITRATES[(3 if version == 3 else 2, layer)][bitrate_index - 1]
+    sample_rate = _MPEG_SAMPLE_RATES[version][sample_index]
+    padding = (b2 >> 1) & 0x01
+    if layer == 3:
+        return (12 * bitrate * 1000 // sample_rate + padding) * 4
+    coefficient = 72 if (layer == 1 and version != 3) else 144
+    return coefficient * bitrate * 1000 // sample_rate + padding
+
+
+def _starts_with_mpeg_frame(payload, offset):
+    """True when a complete frame sits at `offset` and is followed by another valid frame (or
+    ends the payload exactly)."""
+    length = _mpeg_frame_length(payload, offset)
+    if length is None or offset + length > len(payload):
+        return False
+    following = offset + length
+    if following == len(payload):
+        return True
+    return _mpeg_frame_length(payload, following) is not None
+
+
+def _id3v2_length(header):
+    """Total ID3v2 tag length from its first 10 bytes, or None.
+
+    The magic may be ``ID3`` or, for assets the older pipeline already damaged, three zero bytes;
+    the declared size still has to be structurally valid.
+    """
+    if len(header) < 10 or header[3] not in (2, 3, 4):
+        return None
+    size = ((header[6] & 0x7F) << 21) | ((header[7] & 0x7F) << 14) \
+        | ((header[8] & 0x7F) << 7) | (header[9] & 0x7F)
+    return 10 + size + (10 if (header[5] & 0x10) else 0)
+
+
+def _looks_like_mpeg(payload):
+    """True only for a real MPEG audio stream: a valid frame at offset 0, or after a leading
+    ID3v2 tag. WAV/HTML/JSON and arbitrary bytes with a stray 0xFF are rejected."""
+    if _starts_with_mpeg_frame(payload, 0):
+        return True
+    if len(payload) >= 10 and payload[:3] in (b"ID3", b"\x00\x00\x00"):
+        tag_length = _id3v2_length(payload[:10])
+        if tag_length is not None and _starts_with_mpeg_frame(payload, tag_length):
+            return True
+    return False
+
+
+def jittered_delay(next_poll_after_ms):
+    """`nextPollAfterMs` is currently null, so a bounded jittered wait is used."""
+    if next_poll_after_ms is not None:
+        return max(0.5, float(next_poll_after_ms) / 1000.0)
+    return random.uniform(2.0, 5.0)
+
+
+def deadline_reached(deadline):
+    return time.monotonic() >= deadline
+
+
+def load_state(config):
+    if os.path.exists(config.state_path):
+        with open(config.state_path, "r", encoding="utf-8") as handle:
+            return json.load(handle)
+    return {}
+
+
+def save_state(config, state):
+    """Persist ids, the original request body and idempotency keys — nothing sensitive."""
+    with open(config.state_path, "w", encoding="utf-8") as handle:
+        json.dump(state, handle, indent=2)
+
+
+def poll_detail(client, project_id, accept, deadline, what):
+    while True:
+        detail = client.call("GET", "%s/projects/%s" % (MUSIC_PATH, project_id))
+        state = accept(detail)
+        if state:
+            print("  projectStatus -> %s" % state)
+            return detail
+        if deadline_reached(deadline):
+            raise TimeoutFailure(
+                "%s did not finish within MYVOCAL_MAX_WAIT_SECONDS; keep projectId=%s and poll again "
+                "later (the work continues server-side)" % (what, project_id))
+        time.sleep(jittered_delay(None))
+
+
+def log_billing(quote):
+    quoted = as_int(quote.get("quotedCharacters"))
+    total = as_int((quote.get("balances") or {}).get("total"))
+    print("  quotedCharacters = %d" % quoted)
+    if total is not None:
+        print("  balance total    = %d" % total)
+    print("  affordable       = %s (shortfall %s)" % (quote.get("affordable"), as_int(quote.get("shortfall"))))
+    if total is not None and quoted is not None:
+        # Exact 64-bit comparison: a float would lose precision above 2^53.
+        print("  balance >= quote : %s (exact integer comparison)" % (total >= quoted))
+        if total < quoted:
+            print("  NOTE: balance is below the quote; generation would fail with code 47005")
+
+
+def main():
+    config = Config()
+    client = Client(config)
+    deadline = time.monotonic() + config.max_wait
+    state = load_state(config)
+    if state.get("projectId"):
+        print("[resume] continuing project %s from the saved state file" % state["projectId"])
+
+    print("[1/7] capabilities")
+    capabilities = client.call("GET", MUSIC_PATH + "/capabilities")
+    print("  accessState=%s plan=%s ratePerMinute=%s" % (
+        capabilities.get("accessState"), capabilities.get("planKey"), capabilities.get("ratePerMinute")))
+    if capabilities.get("accessState") != "ENABLED":
+        sys.exit("account accessState is %s; Text-to-Music is not available" % capabilities.get("accessState"))
+
+    languages = capabilities.get("supportedVocalLanguages") or []
+    vocal_language = config.vocal_language or (languages[0]["code"] if languages else "en")
+    durations = capabilities.get("supportedDurationsSec") or []
+    duration = config.duration_sec if config.duration_sec in durations else (durations[0] if durations else 90)
+
+    if not state.get("projectId"):
+        print("[2/7] create project")
+        request_body = {
+            "description": "An upbeat summer pop song about a road trip along the coast.",
+            "genre": "POP",
+            "styleNotes": "Bright synths, driving drums, warm bass.",
+            "moods": ["UPLIFTING", "ENERGETIC"],
+            "vocalLanguage": vocal_language,
+            "durationSec": duration,
+            "lyricsMode": "AUTO",
+            "vocalStyle": "BRIGHT_ENERGETIC",
+        }
+        # Persist the key and the request binding BEFORE sending, so a lost response can
+        # be resumed with the same identity instead of creating a second project.
+        saved_key, saved_body = state.get("createKey"), state.get("createBody")
+        if saved_key and saved_body:
+            # The saved key is bound to the body it was sent with. A response that never
+            # arrived must be replayed with that original body, never with new settings.
+            if saved_body != request_body:
+                sys.exit("the saved create request used durationSec=%s/vocalLanguage=%s but this "
+                         "run would send durationSec=%s/vocalLanguage=%s. Refusing to send the "
+                         "current settings with the saved Idempotency-Key; re-run with the original "
+                         "MYVOCAL_DURATION_SEC/MYVOCAL_VOCAL_LANGUAGE, or use a fresh "
+                         "MYVOCAL_OUTPUT_DIR for a different request (the saved state is kept)."
+                         % (saved_body.get("durationSec"), saved_body.get("vocalLanguage"),
+                            request_body.get("durationSec"), request_body.get("vocalLanguage")))
+            request_body = saved_body
+        elif saved_key:
+            sys.exit("a create Idempotency-Key is saved without its original request body; it "
+                     "cannot be replayed safely, so the saved state is kept unchanged")
+        else:
+            state["createKey"] = new_idempotency_key()
+            state["createBody"] = request_body
+            save_state(config, state)
+        created = client.call("POST", MUSIC_PATH + "/projects", request_body, state["createKey"])
+        state["projectId"] = created["projectId"]
+        save_state(config, state)
+        print("  projectId=%s status=%s" % (state["projectId"], created.get("projectStatus")))
+    elif state.get("createKey") and not state.get("createReplayed"):
+        replayed = client.call("POST", MUSIC_PATH + "/projects", state.get("createBody"), state["createKey"])
+        if replayed.get("projectId") != state["projectId"]:
+            sys.exit("server returned a different projectId for the same idempotency key")
+        state["createReplayed"] = True
+        save_state(config, state)
+        print("  create replayed with the saved key (no second project)")
+
+    project_id = state["projectId"]
+
+    print("[3/7] poll until the arrangement is ready")
+    detail = poll_detail(
+        client, project_id,
+        lambda value: value.get("projectStatus")
+        if value.get("projectStatus") in ("ARRANGEMENT_READY", "GENERATING", "READY")
+        else None,
+        deadline, "the arrangement")
+    arrangement_version = detail.get("arrangementVersion")
+
+    if detail.get("projectStatus") == "READY":
+        # The song already exists: re-quoting now would produce a new quote that cannot be
+        # used with the saved generation key, so go straight to the finished asset.
+        print("[4/7]-[6/7] song is already READY; skipping quote and generation")
+    elif state.get("quoteId") and state.get("generateKey"):
+        print("[4/7]-[6/7] reusing the saved quoteId and generate key (no re-pricing)")
+        # Re-sending the same key and body is the documented replay of an accepted
+        # generation; it must not create a second job or a second reservation.
+        replay = client.call("POST", "%s/projects/%s/generations" % (MUSIC_PATH, project_id),
+                             state.get("generateBody"), state["generateKey"])
+        state["jobId"] = replay.get("jobId") or state.get("jobId")
+        save_state(config, state)
+        print("  generation replayed; jobId=%s" % state.get("jobId"))
+    else:
+        print("[4/7] quote")
+        quote = client.call("POST", "%s/projects/%s/quotes" % (MUSIC_PATH, project_id),
+                            {"arrangementVersion": arrangement_version})
+        log_billing(quote)
+        state["quoteId"] = quote.get("quoteId")
+        state["arrangementVersion"] = arrangement_version
+        save_state(config, state)
+
+        print("[5/7] generate")
+        request_body = {"quoteId": state["quoteId"]}
+        state["generateKey"] = state.get("generateKey") or new_idempotency_key()
+        state["generateBody"] = request_body
+        save_state(config, state)
+        generation = client.call("POST", "%s/projects/%s/generations" % (MUSIC_PATH, project_id),
+                                 request_body, state["generateKey"])
+        state["jobId"] = generation.get("jobId")
+        save_state(config, state)
+        print("  jobId=%s reservedCharacters=%s" % (state["jobId"], generation.get("reservedCharacters")))
+
+    print("[6/7] poll until the song is ready")
+    ready = poll_detail(
+        client, project_id,
+        lambda value: value.get("projectStatus") if value.get("projectStatus") in ("READY", "DELETED") else None,
+        deadline, "the song")
+    if ready.get("projectStatus") != "READY":
+        print("FAILED: the project state is %s; no audio was produced." % ready.get("projectStatus"),
+              file=sys.stderr)
+        return EXIT_API_ERROR
+    asset = ready.get("readyAsset") or {}
+    print("  assetId=%s durationMillis=%s" % (asset.get("assetId"), asset.get("durationMillis")))
+
+    print("[7/7] playback URL and download")
+    playback = client.call("GET", "%s/projects/%s/playback-url" % (MUSIC_PATH, project_id))
+    print("  playback url expires at %s" % playback.get("expiresAt"))
+
+    mp3_path = os.path.join(config.output_dir, "music_output.mp3")
+    content_type, payload = client.download_audio("%s/projects/%s/download" % (MUSIC_PATH, project_id))
+    with open(mp3_path, "wb") as handle:
+        handle.write(payload)
+    print("  wrote %s (%d bytes, %s)" % (mp3_path, len(payload), content_type))
+    print("OK: Text-to-Music quickstart completed")
+    return EXIT_OK
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except ApiError as error:
+        print("FAILED: %s" % error, file=sys.stderr)
+        if error.code == 401:
+            print("The accessKey was rejected; check MYVOCAL_API_KEY.", file=sys.stderr)
+        sys.exit(EXIT_API_ERROR)
+    except TimeoutFailure as error:
+        print("TIMEOUT: %s" % error, file=sys.stderr)
+        sys.exit(EXIT_TIMEOUT)

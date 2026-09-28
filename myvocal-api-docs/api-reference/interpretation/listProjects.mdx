@@ -1,0 +1,90 @@
+---
+title: "List interpretation projects"
+api: "GET https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects"
+description: "Page through the Interpretation projects owned by your account."
+---
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Query
+
+<ParamField query="page" type="number" required>
+  Page number, `>= 1`.
+</ParamField>
+
+<ParamField query="pageSize" type="number" required>
+  Page size: `10`, `20` or `50`.
+</ParamField>
+
+### Response
+
+<ResponseField name="page" type="number">
+  Echoed page number.
+</ResponseField>
+
+<ResponseField name="pageSize" type="number">
+  Echoed page size.
+</ResponseField>
+
+<ResponseField name="total" type="number">
+  Total number of projects.
+</ResponseField>
+
+<ResponseField name="totalPage" type="number">
+  Total number of pages.
+</ResponseField>
+
+<ResponseField name="list" type="array">
+  Entries shaped `{ projectId, name, state, summaryState, sourceDurationMs, targetLanguageCount, readyTargetCount, updatedAt }`. `sourceDurationMs` is a **string**.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects?page=1&pageSize=20' \
+--header 'accessKey: <your_api_key>'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 1,
+    "totalPage": 1,
+    "list": [
+      {
+        "projectId": "ip_...",
+        "name": "Launch video ES/FR",
+        "state": "PROCESSING",
+        "summaryState": "PARTIAL_READY",
+        "sourceDurationMs": "90000",
+        "targetLanguageCount": 2,
+        "readyTargetCount": 1,
+        "updatedAt": "2027-01-15T15:56:40"
+      }
+    ],
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Info>
+`summaryState` is a rolled-up statistic and deliberately does not overstate progress: `PARTIAL_READY` means some target languages are ready and some are not.
+</Info>
+
+### Common errors
+
+- `code = 47101`: `page` is below `1`, or `pageSize` is not `10`, `20` or `50`.

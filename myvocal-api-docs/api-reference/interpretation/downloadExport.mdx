@@ -1,0 +1,118 @@
+---
+title: "Download an export"
+api: "GET https://api.myvocal.ai/sound_clone/api/v1/interpretation/exports/{exportId}/download"
+description: "Poll an export and get a temporary download URL once it is ready."
+---
+
+This endpoint both reports progress and, once the export is `READY`, returns the temporary download URL for the file.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="exportId" type="string" required>
+  The export identifier from the create-export call.
+</ParamField>
+
+### Response
+
+<ResponseField name="exportId" type="string">
+  The export identifier.
+</ResponseField>
+
+<ResponseField name="format" type="string">
+  The export format.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  `PROCESSING`, `RETRY` or `READY`. Only `READY` has a download URL.
+</ResponseField>
+
+<ResponseField name="mimeType" type="string | null">
+  The media type, once available.
+</ResponseField>
+
+<ResponseField name="url" type="string | null">
+  The temporary download URL. `null` while the export is still being processed.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string | null">
+  When the URL stops working. `null` while processing.
+</ResponseField>
+
+<ResponseField name="assetVersion" type="string | null">
+  The stored asset version, or `null` — notably while the export is still processing.
+</ResponseField>
+
+<ResponseField name="rangeSupported" type="boolean">
+  Whether the URL supports range requests.
+</ResponseField>
+
+<ResponseField name="renewalAttemptLimit" type="number">
+  How many renewal attempts one failed request may use before the authorization error is surfaced. Currently `1`: renew once, then report the error instead of retrying without bound.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/exports/ie_.../download' \
+--header 'accessKey: <your_api_key>'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Still processing
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "exportId": "ie_...",
+    "format": "wav",
+    "state": "PROCESSING",
+    "mimeType": null,
+    "url": null,
+    "expiresAt": null,
+    "assetVersion": null,
+    "rangeSupported": false,
+    "renewalAttemptLimit": 1,
+    "requestId": "..."
+  }
+}
+```
+
+```json 200 Ready
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "exportId": "ie_...",
+    "format": "wav",
+    "state": "READY",
+    "mimeType": "audio/wav",
+    "url": "https://<storage-host>/...",
+    "expiresAt": "2027-01-15T16:20:00",
+    "assetVersion": "1",
+    "rangeSupported": true,
+    "renewalAttemptLimit": 1,
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+Poll the **same** `exportId` while the state is `PROCESSING` or `RETRY`. Neither is a terminal failure, and neither has a URL yet. Only when the state is `READY` should you download the bytes — and if the URL has expired by then, call this endpoint again for a fresh one. A non-empty `url` field is not by itself proof of success: check `state` and verify that the transfer actually produced media bytes.
+</Warning>
+
+### Common errors
+
+- `code = 47113`: the export is recovering; keep polling.
+- `code = 47117`: the export does not exist, or is not owned by your account.
+- `code = 47127`: object storage is unavailable — retry.

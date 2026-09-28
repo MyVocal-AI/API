@@ -1,0 +1,82 @@
+---
+title: "Create an export"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/interpretation/targets/{targetId}/exports"
+description: "Start a downloadable export of one finished target language."
+---
+
+Starts an asynchronous export of a ready target language in the requested format.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="targetId" type="string" required>
+  The target language entry. It must be ready and have an output asset.
+</ParamField>
+
+### Body
+
+<ParamField body="format" type="string" required>
+  One of `capabilities.exportFormats`: `mp3`, `wav`, `flac` or `mp4`. `mp4` is the composed video and requires a video source.
+</ParamField>
+
+### Response
+
+<ResponseField name="exportId" type="string">
+  The export identifier. Poll the download endpoint with this same id.
+</ResponseField>
+
+<ResponseField name="targetId" type="string">
+  The target language.
+</ResponseField>
+
+<ResponseField name="format" type="string">
+  The requested format.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  `PROCESSING` at first. Later `RETRY` (a transient retry of the same export) or `READY`.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/targets/it_.../exports' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{ "format": "wav" }'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "exportId": "ie_...",
+    "targetId": "it_...",
+    "format": "wav",
+    "state": "PROCESSING",
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+`PROCESSING` and `RETRY` are not failures: keep polling the **same** `exportId`. Starting a new generation to work around a slow export will charge again.
+</Warning>
+
+### Common errors
+
+- `code = 47117`: the target does not exist, is not part of a project you own, or is not ready.
+- `code = 47101`: `format` is missing or is not a supported export format.
+- `code = 47102`: the project does not exist **or** is not owned by your account.

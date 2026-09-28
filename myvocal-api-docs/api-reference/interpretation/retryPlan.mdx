@@ -1,0 +1,94 @@
+---
+title: "Get a retry plan"
+api: "GET https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/{projectId}/targets/{targetId}/retry-plan"
+description: "Ask the server what a retry of a failed target would cost and which cycle it would use."
+---
+
+Only a target in `FAILED_RELEASED` with `action = "RETRY"` can be retried. This endpoint returns the server's plan; the client never prices a retry.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The project identifier.
+</ParamField>
+
+<ParamField path="targetId" type="string" required>
+  The target language entry to retry.
+</ParamField>
+
+### Response
+
+<ResponseField name="targetId" type="string">
+  The target identifier.
+</ResponseField>
+
+<ResponseField name="language" type="string">
+  The target language.
+</ResponseField>
+
+<ResponseField name="generationId" type="string">
+  The logical generation the retry would continue.
+</ResponseField>
+
+<ResponseField name="nextReservationCycle" type="number">
+  The reservation cycle the retry would use. Pass it to the retry endpoint.
+</ResponseField>
+
+<ResponseField name="characters" type="string">
+  The Characters the retry would confirm, as a **string**.
+</ResponseField>
+
+<ResponseField name="rateVersion" type="string">
+  The rate version applied.
+</ResponseField>
+
+<ResponseField name="retryable" type="boolean">
+  Whether a retry is currently allowed.
+</ResponseField>
+
+<ResponseField name="reason" type="string">
+  A human-readable reason.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/ip_.../targets/it_.../retry-plan' \
+--header 'accessKey: <your_api_key>'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "targetId": "it_...",
+    "language": "es",
+    "generationId": "ia_...",
+    "nextReservationCycle": 2,
+    "characters": "6000",
+    "rateVersion": "interp-2026-09-27-v1",
+    "retryable": true,
+    "reason": "PREVIOUS_ATTEMPT_RELEASED",
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+### Common errors
+
+- `code = 47117`: the target does not exist, is not part of this project, or is not owned by your account.
+- `code = 47118`: the target is not in a retryable state.
+- `code = 47102`: the project does not exist **or** is not owned by your account.

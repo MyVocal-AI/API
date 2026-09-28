@@ -1,0 +1,93 @@
+---
+title: "Play an interpretation asset"
+api: "GET https://api.myvocal.ai/sound_clone/api/v1/interpretation/assets/{assetId}/playback"
+description: "Get a temporary URL for a finished language version."
+---
+
+Returns a temporary product URL for an asset, such as a finished target language. Take the `assetId` from `targets[].outputAssetId` in the project detail.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="assetId" type="string" required>
+  The asset identifier.
+</ParamField>
+
+### Response
+
+<ResponseField name="assetId" type="string">
+  The asset identifier.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  The asset state.
+</ResponseField>
+
+<ResponseField name="mimeType" type="string">
+  The media type of the asset.
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  The temporary playback URL.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string">
+  When the URL stops working.
+</ResponseField>
+
+<ResponseField name="assetVersion" type="string | null">
+  The stored asset version, or `null` when no storage version is recorded.
+</ResponseField>
+
+<ResponseField name="rangeSupported" type="boolean">
+  Whether the URL supports range requests.
+</ResponseField>
+
+<ResponseField name="renewalAttemptLimit" type="number">
+  How many renewal attempts one failed request may use before the authorization error is surfaced. Currently `1`: renew once, then report the error instead of retrying without bound.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/assets/ia_.../playback' \
+--header 'accessKey: <your_api_key>'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "assetId": "ia_...",
+    "state": "READY",
+    "mimeType": "audio/mpeg",
+    "url": "https://<storage-host>/...",
+    "expiresAt": "2027-01-15T16:10:00",
+    "assetVersion": "1",
+    "rangeSupported": true,
+    "renewalAttemptLimit": 1,
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+The URL is temporary. Request it when you need to play the audio and request a new one after it expires rather than storing it.
+</Warning>
+
+### Common errors
+
+- `code = 47102`: the asset does not exist **or** is not owned by your account. The API does not distinguish the two.
+- `code = 47127`: object storage is unavailable — retry.

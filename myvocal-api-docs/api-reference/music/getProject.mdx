@@ -1,0 +1,111 @@
+---
+title: "Get a music project"
+api: "GET https://api.myvocal.ai/sound_clone/api/v1/music/projects/{projectId}"
+description: "Read the current state of a Text-to-Music project, including its arrangement, quote and ready asset."
+---
+
+This is the main polling endpoint for Text-to-Music.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The project identifier returned by create.
+</ParamField>
+
+### Response
+
+<ResponseField name="projectId" type="string">
+  Project identifier.
+</ResponseField>
+
+<ResponseField name="parentProjectId" type="string | null">
+  Set on a child version created by `POST /versions`.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Project name.
+</ResponseField>
+
+<ResponseField name="projectStatus" type="string">
+  `ARRANGEMENT_GENERATING`, `ARRANGEMENT_READY`, `GENERATING`, `READY` or `DELETED`. `ARRANGEMENT_READY` means the arrangement is done — not that the song exists.
+</ResponseField>
+
+<ResponseField name="brief" type="object">
+  The validated creative brief.
+</ResponseField>
+
+<ResponseField name="arrangementVersion" type="number">
+  Current arrangement version. Use it as `expectedVersion` when you edit or regenerate.
+</ResponseField>
+
+<ResponseField name="arrangement" type="object | null">
+  The current arrangement, or `null` before it exists.
+</ResponseField>
+
+<ResponseField name="activeQuote" type="object | null">
+  `{ quoteId, arrangementVersion, planKey, ratePerMinute, rateVersion, durationSec, quotedCharacters, expiresAt }`. `quotedCharacters` is a **string**.
+</ResponseField>
+
+<ResponseField name="activeJob" type="object | null">
+  `{ jobId, jobType, status, attemptCount, createdAt, updatedAt, displayStage, terminal }`. `attemptCount` is a decimal **string** for an `ARRANGEMENT` job (for example `"0"`) and `null` for a `SONG` job.
+</ResponseField>
+
+<ResponseField name="readyAsset" type="object | null">
+  Present when the song is downloadable: `{ assetId, durationMillis, sampleRateHz, mimeType }`. `durationMillis` is a **string**.
+</ResponseField>
+
+<ResponseField name="lastFailure" type="object | null">
+  `{ code, errorCode, retryable, action }` when the work failed.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  Timestamp, `yyyy-MM-dd'T'HH:mm:ss`.
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  Timestamp, `yyyy-MM-dd'T'HH:mm:ss`.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/projects/mup_...' \
+--header 'accessKey: <your_api_key>'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "projectId": "mup_...",
+    "parentProjectId": null,
+    "name": "Coast Road",
+    "projectStatus": "READY",
+    "arrangementVersion": 1,
+    "activeQuote": null,
+    "activeJob": { "jobId": "muj_...", "jobType": "SONG", "status": "READY", "displayStage": "FINALIZING_LIBRARY_ITEM", "terminal": true },
+    "readyAsset": { "assetId": "ma_...", "durationMillis": "90000", "sampleRateHz": 44100, "mimeType": "audio/mpeg" },
+    "lastFailure": null,
+    "createdAt": "2027-01-15T15:50:02",
+    "updatedAt": "2027-01-15T15:56:40",
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+### Common errors
+
+- `code = 47009`: the project does not exist **or** does not belong to your account. The API never distinguishes the two.

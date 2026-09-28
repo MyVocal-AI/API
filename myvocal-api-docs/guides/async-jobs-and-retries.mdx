@@ -1,0 +1,141 @@
+---
+title: "Async jobs, polling and retries"
+description: "How Text-to-Music and Interpretation report progress, and how to poll, time out and recover safely."
+---
+
+<Info>
+Text-to-Music and Interpretation are asynchronous and **poll-based**. A create call returns identifiers immediately; you then poll the project or job endpoints until the resource reaches a terminal state. Neither product uses callbacks or webhooks — that mechanism belongs to the AI Cover flows described in [Callback](/callback).
+</Info>
+
+## The shape of an async call
+
+1. **Create** with an `Idempotency-Key`. You receive a stable resource identifier (project, job, target, upload, export).
+2. **Poll** the read endpoints for that resource.
+3. **Act** when the resource is terminal: play, download or export — or read the failure and recover.
+
+Always keep the returned identifiers. They are the only reliable way to recover after a timeout, a crash or a lost response.
+
+## Terminal states
+
+### Text-to-Music
+
+Read the project with `GET /sound_clone/api/v1/music/projects/{projectId}`.
+
+| Field | Terminal values |
+|---|---|
+| `projectStatus` | `READY` (song available), `DELETED`; failures are reported through `lastFailure` |
+| job `status` | `READY`, `FAILED`, `RELEASED` (`terminal` is `true` for exactly these) |
+
+`RECOVERY_REQUIRED` is **not** terminal. It means the outcome still needs reconciliation: keep the identifiers and keep querying. It is neither a failure nor a refund.
+
+### Interpretation
+
+Read the project with `GET /sound_clone/api/v1/interpretation/projects/{projectId}`.
+
+| Field | Values |
+|---|---|
+| `summaryState` | `DRAFT`, `PROCESSING`, `PARTIAL_READY`, `READY`, `FAILED` |
+| `targets[].state` | `QUEUED`, `PREPARING`, `TRANSLATING`, `EXPORTING`, `RECONCILING`, `READY`, `FAILED_RELEASED` |
+
+`READY` and `FAILED_RELEASED` are the per-target end states. `summaryState` is a roll-up: `PARTIAL_READY` means some languages are done and some are not — it is a normal interim state, not an error.
+
+`RECONCILING` (on a target, a job or a logical generation) means the result is still being reconciled. Treat it as "still working", never as a failure or as an already-released reservation.
+
+### Exports (Interpretation)
+
+An export is its own small async resource: `PROCESSING`, `RETRY` or `READY`. `PROCESSING` and `RETRY` are transient; keep polling the **same** `exportId`. `READY` is the only state that has a download URL. In particular, do not treat `RETRY` as a terminal failure and never start a new paid generation to work around a slow export.
+
+## Choosing a poll interval
+
+- `nextPollAfterMs` is the field meant for this. On Interpretation it is currently always `null`, because the service does not publish a suggested interval yet. Handle `null` explicitly.
+- Use a bounded interval with jitter — 2–5 seconds is a reasonable starting point for both products — and an overall bounded wait.
+- Do not poll in a tight loop, and do not poll a resource you can no longer act on.
+
+```
+delay = nextPollAfterMs ?? randomBetween(2000, 5000)   // jitter avoids synchronized bursts
+wait at most MAX_WAIT for the resource to become terminal
+```
+
+## Recovering from a timeout
+
+A timeout is a **client-side** decision. It does not cancel the server-side work and it does not mean the work failed.
+
+When you time out:
+
+1. Report the resource identifiers (`projectId`, `jobId`, `targetId`, `exportId`) to the user or log them.
+2. Stop; keep the identifiers.
+3. Resume later by querying the same identifiers — the work continues server-side.
+
+Do **not**:
+
+- Treat a timeout as a failure and issue a refund or a release. Only the real ledger state can tell you what happened to the reservation.
+- Resubmit a paid generation because you lost the response. That is what the identifiers and the idempotency key are for.
+
+## Idempotency and replay
+
+`Idempotency-Key` is required on the create/accept endpoints. Use a unique printable ASCII value of 16–64 characters per distinct operation, and persist it together with the request body summary and the returned identifiers, so a restart can resume instead of starting over.
+
+Important: **a replay is not guaranteed to return the first response.**
+
+| Product | Behaviour |
+|---|---|
+| Text-to-Music | A replay re-reads the current resource. `POST /projects` may return a full project detail where the first response returned `{projectId, projectStatus, job}`; `POST /generations` and `/arrangement/regenerate` may return a job read model instead of the original create payload. |
+| Interpretation | A replay re-reads the current acceptance; target and job state may already have advanced. The same quote presented with a different key also reuses the existing acceptance, before any price re-check, so it is not charged twice. |
+
+Recovery rule for both: **use the stable identifier to re-query** (`GET /projects/{id}`, `GET /jobs/{id}`) rather than assuming the replay equals the first response.
+
+Conflicts are different from replays:
+
+- Music: same key with a different body → `code = 47008`.
+- Interpretation: same key with a different body → `code = 47111`.
+
+A conflict means something already happened for that key. Never silently switch to a new key to force the call through; re-read the resource to find out what the server already did.
+
+## Transient versus terminal failures
+
+Not every failure should end your flow:
+
+| Signal | Meaning | What to do |
+|---|---|---|
+| Music `47010`, Interpretation error while a target is mid-flight | An operation is already in progress | Wait and re-query; do not start a parallel paid operation |
+| Music `47011`, Interpretation `47122` | Temporarily unavailable | Bounded retry with backoff |
+| Music `47006` / `47007`, Interpretation `47108` / `47109` | Quote expired or no longer valid | Re-quote, then generate again (see below) |
+| Music `47013` / `47014`, Interpretation `47118` | Generation failed / output invalid, reservation released | Business failure; report it and offer a retry if one is supported |
+| Music `47017` | Delete conflicted with an in-flight job | The job is not cancelled; wait for it, then decide |
+| Interpretation `47112` / `47113` | Reconciling / export recovering | Keep polling; these are not failures |
+
+## Expired or consumed quotes
+
+- A quote has a time-to-live (`quoteTtlSeconds`, normally 600 seconds).
+- Text-to-Music consumes a quote when it is used: re-submitting the same `quoteId` with a different key is rejected with `47007`.
+- Interpretation **reuses** the acceptance for an already-accepted quote instead of charging again.
+
+So when a generation attempt fails before any work starts, re-quote and try again. When it fails after the quote was accepted, query the existing project/job before doing anything else — you may already have a resource in progress.
+
+## Retrying a failed Interpretation target
+
+Only a target in `FAILED_RELEASED` with `action = "RETRY"` may be retried:
+
+1. `GET /projects/{projectId}/targets/{targetId}/retry-plan` — the server decides the amount and the next reservation cycle.
+2. `POST /projects/{projectId}/targets/{targetId}/retry` with the plan's `nextReservationCycle`, `characters` and `rateVersion`.
+
+Those amount fields are a **confirmation of the server's plan**, not client-side pricing: never compute or adjust the price yourself. `OPERATION_RETRY` is replay-safe, so a retried POST with the same key does not create a second charge.
+
+## Regenerating a Text-to-Music arrangement
+
+If the arrangement is not what you wanted, `POST /projects/{projectId}/arrangement/regenerate` with `{ "expectedVersion": n }` requests a new arrangement (idempotent). An `expectedVersion` mismatch is rejected with `47016`; re-read the project and retry with the current version.
+
+## A sample polling loop
+
+```text
+create -> save projectId (+ jobId)
+loop until terminal or MAX_WAIT:
+    sleep(delay)
+    detail = GET /projects/{projectId}
+    if terminal: break
+    delay = nextPollAfterMs ?? jittered(2000..5000)
+if not terminal after MAX_WAIT:
+    report projectId/jobId, stop, resume later with the same identifiers
+```
+
+Both runnable examples ([`examples/music/quickstart.py`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/music/quickstart.py), [`examples/music/quickstart.mjs`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/music/quickstart.mjs), [`examples/interpretation/quickstart.py`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/interpretation/quickstart.py), [`examples/interpretation/quickstart.mjs`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/interpretation/quickstart.mjs)) implement exactly this loop, including the `null` handling and the bounded wait.

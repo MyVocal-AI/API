@@ -1,0 +1,174 @@
+---
+title: "Quote interpretation targets"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/{projectId}/quotes"
+description: "Price the translation and dubbing of the requested target languages."
+---
+
+Quoting is free. The price is per **new** target language: adding a language to an existing project charges only for the language being added.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The project identifier. The source must already be ready.
+</ParamField>
+
+### Body
+
+<ParamField body="settingsVersion" type="number">
+  Optional. If present and different from the current version, the request is rejected with `47109`.
+</ParamField>
+
+<ParamField body="targetLanguages" type="array" required>
+  The languages to price. Must not be empty.
+</ParamField>
+
+### Response
+
+<ResponseField name="quoteId" type="string | null">
+  Pass this to the generation endpoint. `null` when `state` is `ALL_TARGETS_EXIST`.
+</ResponseField>
+
+<ResponseField name="projectId" type="string">
+  Project identifier.
+</ResponseField>
+
+<ResponseField name="settingsVersion" type="number">
+  Draft version the quote was based on.
+</ResponseField>
+
+<ResponseField name="sourceDurationMs" type="string">
+  Source duration, as a **string**.
+</ResponseField>
+
+<ResponseField name="planKey" type="string">
+  The plan the rate came from.
+</ResponseField>
+
+<ResponseField name="rateVersion" type="string">
+  Rate version label.
+</ResponseField>
+
+<ResponseField name="charactersPerMinutePerLanguage" type="number">
+  The rate applied, per language.
+</ResponseField>
+
+<ResponseField name="perTargetCharacters" type="string | null">
+  Characters per new language, as a **string**.
+</ResponseField>
+
+<ResponseField name="requestedLanguages" type="array">
+  The languages you asked for.
+</ResponseField>
+
+<ResponseField name="existingTargets" type="array">
+  Languages that already exist for this source: `{ language, characters, targetId, state, action }`.
+</ResponseField>
+
+<ResponseField name="newTargets" type="array">
+  Languages that will be created and charged.
+</ResponseField>
+
+<ResponseField name="targets" type="array">
+  The languages a submission would create and reserve now. This field is **the same content as `newTargets`**, kept under its pre-decision name — it is **not** a union of `existingTargets` and `newTargets`, and it excludes languages the project already carries.
+</ResponseField>
+
+<ResponseField name="totalCharacters" type="string">
+  Total charge, as a **string**. `"0"` for `ALL_TARGETS_EXIST`.
+</ResponseField>
+
+<ResponseField name="availableCharacters" type="string | null">
+  Available balance, as a **string**.
+</ResponseField>
+
+<ResponseField name="estimatedRemainingCharacters" type="string | null">
+  Projected balance, as a **string**.
+</ResponseField>
+
+<ResponseField name="balanceState" type="string | null">
+  `AVAILABLE` or `LEDGER_UNAVAILABLE` for this response, or `null`. It describes the balance fields of **this** response only; a `LEDGER_UNAVAILABLE` value means `availableCharacters` and `estimatedRemainingCharacters` are `null` rather than guessed.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  `ACTIVE`, `ALL_TARGETS_EXIST` or `CHANGED`.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string | null">
+  When the quote expires (time to live `quoteTtlSeconds`, normally 600 seconds).
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/ip_.../quotes' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{ "settingsVersion": 1, "targetLanguages": ["es", "fr"] }'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "quoteId": "iq_...",
+    "projectId": "ip_...",
+    "settingsVersion": 1,
+    "sourceDurationMs": "90000",
+    "planKey": "PRO",
+    "rateVersion": "interp-2026-09-27-v1",
+    "charactersPerMinutePerLanguage": 4000,
+    "perTargetCharacters": "6000",
+    "requestedLanguages": ["es", "fr"],
+    "existingTargets": [],
+    "newTargets": [ { "language": "es", "characters": "6000" }, { "language": "fr", "characters": "6000" } ],
+    "targets": [ { "language": "es", "characters": "6000" }, { "language": "fr", "characters": "6000" } ],    "totalCharacters": "12000",
+    "availableCharacters": "20000",
+    "estimatedRemainingCharacters": "8000",
+    "balanceState": "AVAILABLE",
+    "state": "ACTIVE",
+    "expiresAt": "2027-01-15T16:05:00",
+    "requestId": "..."
+  }
+}
+```
+
+```json 200 All targets already exist
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "quoteId": null,
+    "perTargetCharacters": null,
+    "totalCharacters": "0",
+    "state": "ALL_TARGETS_EXIST",
+    "existingTargets": [ { "language": "es", "characters": "6000", "targetId": "it_...", "state": "READY", "action": "NONE" } ],
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+`ALL_TARGETS_EXIST` is a successful quote, not an error. `quoteId` is `null` and `totalCharacters` is `"0"` — read `existingTargets` and **never** call the generation endpoint with a `null` quoteId. All Characters values are JSON strings; convert them before comparing.
+</Warning>
+
+### Common errors
+
+- `code = 47101`: `targetLanguages` is missing or empty.
+- `code = 47109`: the quote is no longer valid for this settings version, or the version changed.
+- `code = 47108`: the quote has expired.
+- `code = 47103`: the source is not ready yet.
+- `code = 47119`: an ENTERPRISE account has no configured contract rate.
+- `code = 47128`: the plan is not entitled to generate.
+- `code = 47102`: the project does not exist **or** is not owned by your account.

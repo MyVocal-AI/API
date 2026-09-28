@@ -1,0 +1,68 @@
+---
+title: "Get a playback URL"
+api: "GET https://api.myvocal.ai/sound_clone/api/v1/music/projects/{projectId}/playback-url"
+description: "Get a temporary URL that plays the finished song."
+---
+
+Use this to preview or stream the finished song without downloading the whole file.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The project identifier.
+</ParamField>
+
+### Response
+
+<ResponseField name="assetId" type="string">
+  The finished audio asset.
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  Temporary URL for the audio.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string">
+  When the URL stops working.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/projects/mup_.../playback-url' \
+--header 'accessKey: <your_api_key>'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "assetId": "ma_...",
+    "url": "https://<storage-host>/...",
+    "expiresAt": "2027-01-15T16:10:00",
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+The URL is short-lived (about 10 minutes). Request it when you need to play the audio instead of storing it, and request a fresh one after it expires.
+</Warning>
+
+### Common errors
+
+- `code = 47009`: the project does not exist **or** is not owned by your account.
+- `code = 47015`: the download/playback source is temporarily unavailable because the song is not ready yet.

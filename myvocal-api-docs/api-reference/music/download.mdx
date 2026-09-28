@@ -1,0 +1,69 @@
+---
+title: "Download the song"
+api: "GET https://api.myvocal.ai/sound_clone/api/v1/music/projects/{projectId}/download"
+description: "Stream the finished song as MP3 bytes."
+---
+
+<Warning>
+This endpoint does **not** return the usual JSON envelope on success. Success is an `audio/mpeg` byte stream. A rejected request, by contrast, is answered with the standard JSON error envelope. Check `Content-Type` (or the JSON `code`) before writing the file, so an error message is never saved as an `.mp3`.
+</Warning>
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The project identifier. The song must be `READY` with a usable `readyAsset`.
+</ParamField>
+
+### Response
+
+<ResponseField name="Content-Type" type="string">
+  `audio/mpeg` on success; a JSON content type when the request is rejected.
+</ResponseField>
+
+<ResponseField name="Content-Disposition" type="string">
+  `attachment; filename="MyVocal-<name>.mp3"`.
+</ResponseField>
+
+<ResponseField name="Body" type="stream">
+  MP3 audio bytes.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/projects/mup_.../download' \
+--header 'accessKey: <your_api_key>' \
+--output song.mp3
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```text 200 Success
+Content-Type: audio/mpeg
+Content-Disposition: attachment; filename="MyVocal-Coast Road.mp3"
+
+(MP3 byte stream)
+```
+
+```json 200 Fail
+{
+  "code": 47015,
+  "message": "Download is temporarily unavailable.",
+  "data": { "errorCode": "47015", "messageKey": "...", "retryable": true, "action": "RETRY_LATER", "requestId": "..." }
+}
+```
+
+</ResponseExample>
+
+### Common errors
+
+- `code = 47009`: the project does not exist **or** is not owned by your account.
+- `code = 47015`: the song is not ready to download yet, or storage is temporarily unavailable — poll the project and retry.

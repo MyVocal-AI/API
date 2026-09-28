@@ -1,0 +1,130 @@
+---
+title: "Patch the interpretation draft"
+api: "PATCH https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/{projectId}/draft"
+description: "Update the source language, keyterms, cloning strength and target languages of a draft."
+---
+
+Updates only the fields you provide. This is a patch, not a replace.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The project identifier.
+</ParamField>
+
+### Body
+
+<ParamField body="expectedVersion" type="number">
+  Optional concurrency guard. If present and different from the current version, the request is rejected with `47116`.
+</ParamField>
+
+<ParamField body="sourceLanguage" type="string | null">
+  `null`, an empty string or `AUTO` normalizes to automatic detection. **Omitting the field keeps the stored value** — it does not clear it.
+</ParamField>
+
+<ParamField body="keyterms" type="array">
+  Replaces the whole list when provided. Up to 1000 entries; each up to 50 code points, up to 5 words, and without `< > { } [ ] \`. An empty array clears the list.
+</ParamField>
+
+<ParamField body="cloningStrength" type="number">
+  `0`–`10`. When omitted or `null`, the stored value is kept; `7` is only used as a fallback when the draft has no value at all.
+</ParamField>
+
+<ParamField body="targetLanguages" type="array">
+  Replaces the whole list when provided. An empty array clears the selection.
+</ParamField>
+
+### Response
+
+<ResponseField name="projectId" type="string">
+  Project identifier.
+</ResponseField>
+
+<ResponseField name="settingsVersion" type="number">
+  The new draft version.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  The project state.
+</ResponseField>
+
+<ResponseField name="sourceLanguage" type="string | null">
+  The stored source language, or `null` for auto-detection.
+</ResponseField>
+
+<ResponseField name="keyterms" type="array">
+  The stored keyterms.
+</ResponseField>
+
+<ResponseField name="cloningStrength" type="number | null">
+  The stored cloning strength.
+</ResponseField>
+
+<ResponseField name="targetLanguages" type="array">
+  The stored target languages.
+</ResponseField>
+
+<ResponseField name="sourceDurationMs" type="string">
+  Source duration as a **string** (`"0"` before a source is uploaded).
+</ResponseField>
+
+<ResponseField name="sourceState" type="string">
+  The source state: `DRAFT`, `FROZEN` or `SUPERSEDED`.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location --request PATCH 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/ip_.../draft' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{
+  "expectedVersion": 1,
+  "sourceLanguage": "en",
+  "targetLanguages": ["es", "fr"],
+  "keyterms": ["MyVocal"],
+  "cloningStrength": 7
+}'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "projectId": "ip_...",
+    "settingsVersion": 2,
+    "state": "DRAFT",
+    "sourceLanguage": "en",
+    "keyterms": ["MyVocal"],
+    "cloningStrength": 7,
+    "targetLanguages": ["es", "fr"],
+    "sourceDurationMs": "0",
+    "sourceState": "DRAFT",
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+"Field omitted or `null`" keeps the current value for `sourceLanguage`, `keyterms`, `cloningStrength` and `targetLanguages`; a provided array — including an empty one — **replaces** the whole list. Do not use `null` to clear a field.
+</Warning>
+
+### Common errors
+
+- `code = 47116`: `expectedVersion` does not match the current version.
+- `code = 47123`: the draft is frozen because a source version was already committed; remove the source first.
+- `code = 47101`: an invalid value, for example a keyterm that is too long or contains a forbidden character.
+- `code = 47102`: the project does not exist **or** is not owned by your account.

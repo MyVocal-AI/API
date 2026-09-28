@@ -1,0 +1,106 @@
+---
+title: "Regenerate the arrangement"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/music/projects/{projectId}/arrangement/regenerate"
+description: "Ask the service for a new arrangement for the current brief."
+---
+
+Queues a new `ARRANGEMENT` job for the project's current brief. Use this when you would rather get a fresh arrangement than edit the existing one.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+<ParamField header="Idempotency-Key" type="string" required>
+  Unique per operation: 16–64 printable ASCII characters. Same key with a different body is rejected with `47008`.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The project identifier.
+</ParamField>
+
+### Body
+
+<ParamField body="expectedVersion" type="number" required>
+  The `arrangementVersion` you based this request on. A mismatch is rejected with `47016`.
+</ParamField>
+
+### Response
+
+<ResponseField name="projectId" type="string">
+  Project identifier.
+</ResponseField>
+
+<ResponseField name="jobId" type="string">
+  The new arrangement job.
+</ResponseField>
+
+<ResponseField name="jobType" type="string">
+  `ARRANGEMENT`.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  `QUEUED`.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/projects/mup_.../arrangement/regenerate' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--header 'Idempotency-Key: 91b7c0de4a2f57c3' \
+--data '{ "expectedVersion": 1 }'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "projectId": "mup_...",
+    "jobId": "muj_...",
+    "jobType": "ARRANGEMENT",
+    "status": "QUEUED",
+    "requestId": "..."
+  }
+}
+```
+
+```json 200 Replay with the same key and body
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "jobId": "muj_...",
+    "projectId": "mup_...",
+    "jobType": "ARRANGEMENT",
+    "status": "READY",
+    "displayStage": "QUEUED",
+    "terminal": true,
+    "failure": null,
+    "attemptCount": "0",
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+A replay re-reads the job instead of replaying the first response byte-for-byte: the same key can return the job read model, with a different field set and a later status. Use `jobId` to query the job.
+</Warning>
+
+### Common errors
+
+- `code = 47016`: `expectedVersion` does not match. Re-read the project and retry.
+- `code = 47008`: the `Idempotency-Key` was reused with a different body.
+- `code = 47009`: the project does not exist **or** is not owned by your account.
+- `code = 47010`: another operation is already in progress for this project.

@@ -1,0 +1,134 @@
+---
+title: "Create a music project"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/music/projects"
+description: "Start a Text-to-Music project from a creative brief. Returns the project and its arrangement job."
+---
+
+Creates the project and immediately queues the **arrangement** stage. This is asynchronous: the response does not contain a song.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+<ParamField header="Idempotency-Key" type="string" required>
+  Unique per distinct operation: 16–64 printable ASCII characters. Same key with the same body replays safely; same key with a different body is rejected with `47008`.
+</ParamField>
+
+### Body
+
+<ParamField body="description" type="string" required>
+  What the song is about. 1–800 code points.
+</ParamField>
+
+<ParamField body="genre" type="string" required>
+  One of the values from `capabilities.genres`.
+</ParamField>
+
+<ParamField body="styleNotes" type="string">
+  Optional production notes, 0–120 code points. `null` is normalized to `""`.
+</ParamField>
+
+<ParamField body="moods" type="array" required>
+  1–3 distinct values from `capabilities.moods`.
+</ParamField>
+
+<ParamField body="vocalLanguage" type="string" required>
+  A `code` from `capabilities.supportedVocalLanguages` (for example `en`).
+</ParamField>
+
+<ParamField body="durationSec" type="number" required>
+  One of `capabilities.supportedDurationsSec`: `60`, `90`, `120` or `180`.
+</ParamField>
+
+<ParamField body="lyricsMode" type="string" required>
+  `AUTO` or `CUSTOM`. With `AUTO`, `customLyrics` must be absent or empty.
+</ParamField>
+
+<ParamField body="customLyrics" type="string">
+  Required content only with `lyricsMode: "CUSTOM"` (20–2800 code points). Normalized to `null` under `AUTO`.
+</ParamField>
+
+<ParamField body="vocalStyle" type="string" required>
+  One of the values from `capabilities.vocalStyles`.
+</ParamField>
+
+### Response
+
+<ResponseField name="projectId" type="string">
+  Stable project identifier. Keep it — it is your recovery anchor.
+</ResponseField>
+
+<ResponseField name="projectStatus" type="string">
+  `ARRANGEMENT_GENERATING` right after creation.
+</ResponseField>
+
+<ResponseField name="job" type="object">
+  `{ jobId, jobType: "ARRANGEMENT", status: "QUEUED" }`.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/projects' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--header 'Idempotency-Key: 6f1c1f0e0b8a4d1e' \
+--data '{
+  "description": "An upbeat summer pop song about a road trip along the coast.",
+  "genre": "POP",
+  "styleNotes": "Bright synths, driving drums, warm bass.",
+  "moods": ["UPLIFTING", "ENERGETIC"],
+  "vocalLanguage": "en",
+  "durationSec": 90,
+  "lyricsMode": "AUTO",
+  "vocalStyle": "BRIGHT_ENERGETIC"
+}'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "projectId": "mup_...",
+    "projectStatus": "ARRANGEMENT_GENERATING",
+    "job": { "jobId": "muj_...", "jobType": "ARRANGEMENT", "status": "QUEUED" },
+    "requestId": "..."
+  }
+}
+```
+
+```json 200 Replay with the same key and body
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "projectId": "mup_...",
+    "name": "Coast Road",
+    "projectStatus": "ARRANGEMENT_READY",
+    "arrangementVersion": 1,
+    "arrangement": { "...": "..." },
+    "activeJob": { "jobId": "muj_...", "status": "READY" },
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+A replay is **not** the first response replayed byte-for-byte: it re-reads the current project and may return the full project detail instead. Use `projectId` to query the resource.
+</Warning>
+
+### Common errors
+
+- `code = 47001`: the brief failed validation (unknown enum, wrong duration, mood list empty or duplicated, description out of range).
+- `code = 47008`: the `Idempotency-Key` was reused with a different body.
+- `code = 47011`: temporarily unavailable — retry with backoff.
+- `code = 47018`: Text-to-Music is not available for this account or cohort.

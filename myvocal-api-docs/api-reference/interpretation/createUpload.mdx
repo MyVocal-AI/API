@@ -1,0 +1,110 @@
+---
+title: "Create an upload session"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/{projectId}/uploads"
+description: "Start a multipart upload for the project's source audio or video file."
+---
+
+Creates a multipart upload session. The service returns the part size and part count; the actual bytes are uploaded directly to object storage.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The project identifier.
+</ParamField>
+
+### Body
+
+<ParamField body="filename" type="string" required>
+  Original file name, non-empty, at most 512 characters.
+</ParamField>
+
+<ParamField body="size" type="number" required>
+  Exact byte length of the file. Greater than `0` and not greater than `capabilities.maxSourceBytes`.
+</ParamField>
+
+<ParamField body="contentType" type="string">
+  Optional. When omitted or blank the service uses `application/octet-stream`. At most 128 characters; CR/LF are rejected.
+</ParamField>
+
+### Response
+
+<ResponseField name="uploadId" type="string">
+  The upload session identifier. Use it for signing parts, polling status and completing.
+</ResponseField>
+
+<ResponseField name="projectId" type="string">
+  Project identifier.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  `CREATED` right after creation.
+</ResponseField>
+
+<ResponseField name="declaredSize" type="string">
+  The declared size, as a **string**.
+</ResponseField>
+
+<ResponseField name="partSizeBytes" type="number">
+  The size of each part, as decided by the service. Use it as returned.
+</ResponseField>
+
+<ResponseField name="totalParts" type="number">
+  The number of parts to upload. Use it as returned.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string">
+  When the session expires (24 hours by default).
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/ip_.../uploads' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{
+  "filename": "launch.mp4",
+  "size": 18432611,
+  "contentType": "video/mp4"
+}'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "uploadId": "iu_...",
+    "projectId": "ip_...",
+    "state": "CREATED",
+    "declaredSize": "18432611",
+    "partSizeBytes": 16777216,
+    "totalParts": 2,
+    "expiresAt": "2027-01-16T15:52:11",
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+Do not assume a fixed 16 MiB part size or a fixed 3 GiB limit. Read `partSizeBytes` and `totalParts` from this response and `maxSourceBytes` from `capabilities`.
+</Warning>
+
+### Common errors
+
+- `code = 47125`: the file exceeded the size limit, or the declared size is not greater than zero / the request is empty.
+- `code = 47101`: `filename` is missing or too long, or `contentType` is invalid.
+- `code = 47102`: the project does not exist **or** is not owned by your account.
+- `code = 47127`: object storage is unavailable — retry.

@@ -1,0 +1,109 @@
+---
+title: "Complete an upload"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/interpretation/uploads/{uploadId}/complete"
+description: "Assemble the uploaded parts, probe the media and commit the source version."
+---
+
+Tells the service that all parts are uploaded. It assembles the object, probes the media, and publishes the source version.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="uploadId" type="string" required>
+  The upload session identifier.
+</ParamField>
+
+### Body
+
+<ParamField body="parts" type="array" required>
+  **All** parts, in part-number order: `{ partNumber, etag }`, using the exact `ETag` values returned by object storage. Missing, extra or mismatched entries are rejected with `47126`.
+</ParamField>
+
+### Response
+
+<ResponseField name="uploadId" type="string">
+  The upload session.
+</ResponseField>
+
+<ResponseField name="projectId" type="string">
+  Project identifier.
+</ResponseField>
+
+<ResponseField name="state" string="false">
+  `READY` when the probe has already finished; otherwise `COMPLETING` or `PROBING`, so poll `GET /uploads/{uploadId}`.
+</ResponseField>
+
+<ResponseField name="errorCode" type="string | null">
+  Set when the upload failed.
+</ResponseField>
+
+<ResponseField name="sourceAssetId" type="string | null">
+  The created source asset, or `null` when it has not been created yet.
+</ResponseField>
+
+<ResponseField name="sourceVersion" type="number">
+  The committed source version.
+</ResponseField>
+
+<ResponseField name="durationMs" type="string | null">
+  Detected duration, as a **string**.
+</ResponseField>
+
+<ResponseField name="media" type="object | null">
+  `{ inputFormat, containerName, audioStreamCount, video, width, height, rotationDegrees }`.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/uploads/iu_.../complete' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{
+  "parts": [
+    { "partNumber": 1, "etag": "<etag-1>" },
+    { "partNumber": 2, "etag": "<etag-2>" }
+  ]
+}'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "uploadId": "iu_...",
+    "projectId": "ip_...",
+    "state": "READY",
+    "errorCode": null,
+    "sourceAssetId": "ia_...",
+    "sourceVersion": 1,
+    "durationMs": "90000",
+    "media": { "inputFormat": "mov,mp4,m4a,3gp,3g2,mj2", "containerName": "mov,mp4,m4a,3gp,3g2,mj2", "audioStreamCount": 1, "video": true },
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+Retrying completion is safe: the service tolerates a lost response by re-reading the object metadata. But always send the **complete** part list — not just the last part.
+</Warning>
+
+### Common errors
+
+- `code = 47126`: the submitted part list does not match the session.
+- `code = 47124`: the upload session does not exist or is not owned by your account.
+- `code = 47125`: the file exceeded the size limit or had no content.
+- `code = 47104` / `47105`: the source is invalid or has no audio track.
+- `code = 47127`: object storage is unavailable — retry.

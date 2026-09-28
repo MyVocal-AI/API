@@ -1,0 +1,94 @@
+---
+title: "Remove the interpretation source"
+api: "DELETE https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/{projectId}/source"
+description: "Detach the uploaded source from a project and return to a draft."
+---
+
+Removes the committed source version so the project can be edited and re-uploaded. Returns the draft representation, the same shape as `PATCH /draft`.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The project identifier.
+</ParamField>
+
+### Response
+
+<ResponseField name="projectId" type="string">
+  Project identifier.
+</ResponseField>
+
+<ResponseField name="settingsVersion" type="number">
+  The current draft version.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  The project state, normally back to `DRAFT`.
+</ResponseField>
+
+<ResponseField name="sourceLanguage" type="string | null">
+  The stored source language, or `null`.
+</ResponseField>
+
+<ResponseField name="keyterms" type="array">
+  The stored keyterms.
+</ResponseField>
+
+<ResponseField name="cloningStrength" type="number | null">
+  The stored cloning strength.
+</ResponseField>
+
+<ResponseField name="targetLanguages" type="array">
+  The stored target languages.
+</ResponseField>
+
+<ResponseField name="sourceDurationMs" type="string">
+  Source duration as a **string**.
+</ResponseField>
+
+<ResponseField name="sourceState" type="string">
+  The source state after removal.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location --request DELETE 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/ip_.../source' \
+--header 'accessKey: <your_api_key>'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "projectId": "ip_...",
+    "settingsVersion": 3,
+    "state": "DRAFT",
+    "sourceLanguage": "en",
+    "keyterms": ["MyVocal"],
+    "cloningStrength": 7,
+    "targetLanguages": ["es", "fr"],
+    "sourceDurationMs": "0",
+    "sourceState": "SUPERSEDED",
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+### Common errors
+
+- `code = 47102`: the project does not exist **or** is not owned by your account.
+- `code = 47123`: the source cannot be removed in the current state.

@@ -1,0 +1,127 @@
+---
+title: "Quote a music generation"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/music/projects/{projectId}/quotes"
+description: "Price the next generation for the current arrangement."
+---
+
+Quoting is free. It tells you the exact Characters charge, whether the account can afford it, and how long the quote stays valid.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The project identifier.
+</ParamField>
+
+### Body
+
+<ParamField body="arrangementVersion" type="number" required>
+  The arrangement version to price.
+</ParamField>
+
+### Response
+
+<ResponseField name="quoteId" type="string">
+  Identifier to pass to the generation endpoint.
+</ResponseField>
+
+<ResponseField name="projectId" type="string">
+  Project identifier.
+</ResponseField>
+
+<ResponseField name="arrangementVersion" type="number">
+  Priced arrangement version.
+</ResponseField>
+
+<ResponseField name="planKey" type="string">
+  The plan the rate came from.
+</ResponseField>
+
+<ResponseField name="ratePerMinute" type="number">
+  Characters per minute applied.
+</ResponseField>
+
+<ResponseField name="rateVersion" type="string">
+  Version label of the applied rate.
+</ResponseField>
+
+<ResponseField name="durationSec" type="number">
+  Priced duration.
+</ResponseField>
+
+<ResponseField name="quotedCharacters" type="string">
+  The price, as a **JSON string**. `ceil(durationSec × ratePerMinute / 60)`.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string">
+  When the quote stops being valid. The time to live is `quoteTtlSeconds` (normally `600`).
+</ResponseField>
+
+<ResponseField name="affordable" type="boolean">
+  Whether the balance covers the quote.
+</ResponseField>
+
+<ResponseField name="shortfall" type="string">
+  How much is missing; `"0"` when affordable.
+</ResponseField>
+
+<ResponseField name="remainingAfterGeneration" type="string">
+  Projected balance after the charge.
+</ResponseField>
+
+<ResponseField name="balances" type="object">
+  `{ monthly, additional, total }`, each a **string**.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/projects/mup_.../quotes' \
+--header 'accessKey: <your_api_key>' \
+--header 'Content-Type: application/json' \
+--data '{ "arrangementVersion": 1 }'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "quoteId": "muq_...",
+    "projectId": "mup_...",
+    "arrangementVersion": 1,
+    "planKey": "POPULAR",
+    "ratePerMinute": 2220,
+    "rateVersion": "music-2026-08-26-v1",
+    "durationSec": 90,
+    "quotedCharacters": "3330",
+    "expiresAt": "2027-01-15T16:00:00",
+    "affordable": true,
+    "shortfall": "0",
+    "remainingAfterGeneration": "7170",
+    "balances": { "monthly": "10500", "additional": "0", "total": "10500" },
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+<Warning>
+Every Characters value is a **JSON string**, because 64-bit integers are serialized as strings to preserve precision. Convert to an integer before comparing or subtracting — never compare them as strings.
+</Warning>
+
+### Common errors
+
+- `code = 47001`: `arrangementVersion` is missing or invalid.
+- `code = 47009`: the project does not exist **or** is not owned by your account.
+- `code = 47003` / `47004`: entitlement is still syncing or undecided; retry shortly.

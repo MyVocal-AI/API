@@ -1,0 +1,188 @@
+---
+title: "Characters, quotes and billing"
+description: "How MyVocal charges Text-to-Music and Interpretation, how quotes reserve Characters, and how settlement and release work."
+---
+
+<Info>
+Text-to-Music and Interpretation consume **Characters**. Nothing is charged by a read call: the cost is always quoted first, then reserved when you accept the quote. Quotes are free.
+</Info>
+
+## Always quote, never estimate
+
+Both products expose a `capabilities` endpoint and a `quotes` endpoint. Read the rate from `capabilities` and the exact amount from `quotes`.
+
+- `POST /sound_clone/api/v1/music/projects/{projectId}/quotes`
+- `POST /sound_clone/api/v1/interpretation/projects/{projectId}/quotes`
+
+Never hard-code a rate table into a client: rates are per plan, and the authoritative value for an account is what the service returns for that account.
+
+## The formulas
+
+### Text-to-Music
+
+```text
+quotedCharacters = ceil(durationSec × ratePerMinute / 60)
+```
+
+`durationSec` is the project's selected duration (`60`, `90`, `120` or `180`). The rate is the account's `ratePerMinute` from `capabilities`.
+
+### Interpretation
+
+```text
+charactersPerTarget = ceil(durationMs × ratePerMinutePerLanguage / 60000)
+totalCharacters     = charactersPerTarget × numberOfNewTargetLanguages
+```
+
+The rate is `account.charactersPerMinutePerLanguage` for the account's plan, and `durationMs` is the detected duration of the frozen source. Charging is **per new target language**: adding a language to an existing project only charges for the language being added, not for the ones that already exist.
+
+## Plan rates
+
+These are the current plan rates published by the service. Always prefer the value returned for the specific account.
+
+**Text-to-Music — `ratePerMinute`**
+
+| Plan | Characters per minute |
+|---|---|
+| STANDARD | 2400 |
+| POPULAR | 2220 |
+| PRO | 1920 |
+| GROWTH | 1700 |
+| BUSINESS | 1440 |
+| ENTERPRISE | 1200 by default; an account-level contract override replaces it |
+
+**Interpretation — `charactersPerMinutePerLanguage`**
+
+| Plan | Characters per minute, per language |
+|---|---|
+| STANDARD | 4500 |
+| POPULAR | 4200 |
+| PRO | 4000 |
+| GROWTH | 3800 |
+| BUSINESS | 3600 |
+| ENTERPRISE | only a configured contract rate; otherwise quoting fails |
+| FREE | cannot generate |
+
+<Warning>
+The two products do **not** share a fallback rule. Text-to-Music is fine with an ENTERPRISE account that has no explicit override and uses the plan default (1200). Interpretation is not: with an ENTERPRISE account and no configured contract rate, quoting fails with `code = 47119` instead of silently picking a number. Do not copy one product's fallback into the other.
+</Warning>
+
+## Worked examples
+
+**Text-to-Music, PRO plan, 90-second song**
+
+```text
+ceil(90 × 1920 / 60) = ceil(2880) = 2880 Characters
+```
+
+**Text-to-Music, POPULAR plan, 90-second song**
+
+```text
+ceil(90 × 2220 / 60) = ceil(3330) = 3330 Characters
+```
+
+**Interpretation, PRO plan, 90-second source, two new languages (Spanish and French)**
+
+```text
+ceil(90000 × 4000 / 60000) = ceil(6000) = 6000 Characters per language
+6000 × 2 = 12000 Characters total
+```
+
+**Interpretation, same project, adding a third language later**
+
+```text
+6000 × 1 = 6000 Characters   (only the new language is charged)
+```
+
+## Reading the numbers safely
+
+<Warning>
+The API serializes 64-bit integers as **JSON strings** to avoid precision loss in JavaScript clients. Every Characters amount — `quotedCharacters`, `totalCharacters`, `perTargetCharacters`, `reservedCharacters`, `shortfall`, `remainingAfterGeneration`, `balances.*`, `targets[].characters` — arrives as a string such as `"12000"`.
+
+- Python: convert with `int(value)`.
+- Node.js: convert with `BigInt(value)` when the value can exceed `Number.MAX_SAFE_INTEGER` (`9007199254740993`); otherwise an explicit numeric parse is fine. Never `JSON.stringify` a value that is still a `BigInt`.
+- **Never** compare these values as strings. `"9000" < "10000"` is `false` lexicographically while `9000 < 10000` is `true` — string comparison gives the wrong answer.
+</Warning>
+
+Request bodies are different: send numbers as JSON numbers (`durationSec: 90`, `size: 18432611`, `expectedVersion: 1`). Do not send strings just because responses use strings.
+
+## The quote response
+
+A quote tells you the price and whether the account can afford it:
+
+| Field | Meaning |
+|---|---|
+| `quotedCharacters` / `perTargetCharacters` | the price |
+| `affordable` | whether the balance covers it |
+| `shortfall` | how much is missing (`"0"` when affordable) |
+| `remainingAfterGeneration` | the projected balance after the charge |
+| `balances.monthly` / `.additional` / `.total` | current balances by source |
+| `expiresAt` | when the quote stops being valid |
+| `state` | `ACTIVE`, `ALL_TARGETS_EXIST` or `CHANGED` |
+| `existingTargets` / `newTargets` | languages that already exist / would be created and charged |
+| `targets` | **the same content as `newTargets`**, kept under its pre-decision name — not a union with `existingTargets` |
+
+Music answers the same questions with `affordable`, `shortfall`, `remainingAfterGeneration` and `balances`, plus `ratePerMinute`, `rateVersion` and `quotedCharacters`.
+
+The balance fields are **per response and per product**, so do not apply one product's wording to the other:
+
+- Interpretation exposes `balanceState`, which is `AVAILABLE` or `LEDGER_UNAVAILABLE`, plus `availableCharacters` and `estimatedRemainingCharacters`. When the shared ledger read is unavailable, the two amounts are `null` and `balanceState` is `LEDGER_UNAVAILABLE` — a state, not a zero and not a guess.
+- Text-to-Music exposes `balances` (which may itself be `null` when the balance cannot be read) and has no `balanceState` field at all.
+- `account.accessState` is a different question again: for Interpretation it is one of `ENABLED`, `FREE_LOCKED`, `ENTERPRISE_UNRESOLVED`, `SYNCING` or `UNRESOLVED`; for Text-to-Music it is `ENABLED` or `DISABLED`.
+
+## Quote lifetime and invalidation
+
+- A quote lives for `quoteTtlSeconds` — normally **600 seconds** (10 minutes).
+- Using an expired quote fails: Music `47006`, Interpretation `47108`.
+- Changing the inputs invalidates the quote. For Music that includes editing or regenerating the arrangement; an invalidated quote later fails with `47007`.
+
+When a quote expires, request a new one. Nothing has been charged.
+
+## `ALL_TARGETS_EXIST` (Interpretation)
+
+If every requested language already exists for the frozen source, the quote returns:
+
+```json
+{
+  "quoteId": null,
+  "perTargetCharacters": null,
+  "totalCharacters": "0",
+  "state": "ALL_TARGETS_EXIST"
+}
+```
+
+This is a successful quote, not an error — and it is not something to pay for. Read `existingTargets` and use the targets that already exist. Never call the generation endpoint with a `null` `quoteId`.
+
+## Reservation, settlement and release
+
+Charging is a three-phase lifecycle managed by the shared Characters ledger:
+
+1. **Quote** — free. It only prices the work.
+2. **Reserve** — when you accept the quote, the amount is *reserved* for that operation. In Music you receive `reservedCharacters` and one job; in Interpretation each target language gets its own reservation and its own `reservationCycle`.
+3. **Settle or release** — after the real outcome, the reservation is *settled* (the Characters are consumed) or *released* (the Characters go back).
+
+<Warning>
+Only the real ledger state may be described as settled or released. A job in `RECOVERY_REQUIRED` / `RECONCILING`, a failed HTTP response, a client timeout or an export in `RETRY` are **not** proof that a reservation was released, and none of them authorize telling a user that they were refunded. Query the resource and read its `billingState` / reservation state instead.
+</Warning>
+
+Notes that follow from this model:
+
+- Each Interpretation target language settles or is released **independently**. One language may settle while another is released — that is the `PARTIAL_READY` case, and it is not a billing error.
+- Interpretation's `billingState` is `SETTLED`, `RESERVED`, `RELEASED` or `UNPRICED`, derived from the reservation and the target state.
+- A generation is settled at most once per target; retries run against the server's plan and never double-charge.
+
+## Not enough Characters
+
+When the balance does not cover the quote:
+
+- `affordable` is `false` and `shortfall` tells you how much is missing.
+- Accepting the quote anyway fails with Music `47005` or Interpretation `47110`.
+
+Top up and re-quote. Do not split a single generation into smaller requests to work around the balance: the price is a property of the request, not of the remaining balance.
+
+## Testing without spending real Characters
+
+There is no "test mode" endpoint. The examples in this repository are written so they can run against a **local deterministic stub server** that replies with the documented response shapes, which is how they are validated without consuming real Characters or calling a real provider. Point `MYVOCAL_API_BASE_URL` at your stub to do the same.
+
+<Warning>
+Running the examples against the production host performs real, billable work and consumes Characters from the account that owns the API key. Use a stub for development, and check `affordable` and `shortfall` before accepting a real quote.
+</Warning>

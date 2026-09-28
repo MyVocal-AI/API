@@ -1,0 +1,124 @@
+---
+title: "Interpretation capabilities"
+api: "GET https://api.myvocal.ai/sound_clone/api/v1/interpretation/capabilities"
+description: "Read the Interpretation account state, rate, language catalog and supported formats."
+---
+
+Read this endpoint first. It publishes the language keys you may request, the accepted input formats, the export formats and the account's rate — instead of hard-coding any of them.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Response
+
+<ResponseField name="productName" type="string">
+  The product name, `Interpretation`.
+</ResponseField>
+
+<ResponseField name="rateVersion" type="string">
+  Version label of the applicable rate.
+</ResponseField>
+
+<ResponseField name="languageCatalogVersion" type="string">
+  Version of the language catalog.
+</ResponseField>
+
+<ResponseField name="languageCatalogState" type="string">
+  `CONFIGURED` when an authoritative language list is configured; `EMPTY` when no usable entries exist, in which case quoting is not available.
+</ResponseField>
+
+<ResponseField name="formatCatalogVersion" type="string">
+  Version of the accepted-format catalog.
+</ResponseField>
+
+<ResponseField name="languages" type="array">
+  The language entries: `{ languageKey, displayName, sourceSupport }`. Use `languageKey` as `targetLanguages` and `sourceLanguage`.
+</ResponseField>
+
+<ResponseField name="audioFormats" type="array">
+  Accepted audio containers/extensions.
+</ResponseField>
+
+<ResponseField name="videoFormats" type="array">
+  Accepted video containers/extensions.
+</ResponseField>
+
+<ResponseField name="exportFormats" type="array">
+  `mp3`, `wav`, `flac`, `mp4`. `mp4` is the composed video and requires a video source.
+</ResponseField>
+
+<ResponseField name="maxSourceBytes" type="string">
+  Maximum declared upload size, as a **string**. Convert before comparing.
+</ResponseField>
+
+<ResponseField name="planRates" type="array">
+  `{ planKey, charactersPerMinutePerLanguage }` entries.
+</ResponseField>
+
+<ResponseField name="quoteTtlSeconds" type="number">
+  How long a quote stays valid. Currently `600`.
+</ResponseField>
+
+<ResponseField name="account" type="object">
+  `{ planKey, accessState, entitlementVersion, charactersPerMinutePerLanguage, availableCharacters, balanceState }`. `availableCharacters` is a **string** or `null`.
+
+  - `accessState` is one of `ENABLED`, `FREE_LOCKED`, `ENTERPRISE_UNRESOLVED`, `SYNCING` or `UNRESOLVED`. Only `ENABLED` may generate.
+  - `balanceState` is either `AVAILABLE` or `LEDGER_UNAVAILABLE`, and it describes **this** account field only. When the shared ledger read is unavailable, `availableCharacters` is `null` and `balanceState` is `LEDGER_UNAVAILABLE` instead of a guessed number.
+</ResponseField>
+
+<ResponseField name="stageAvailability" type="object">
+  Availability flags for the public stages. Internal development identifiers are not published here.
+</ResponseField>
+
+<RequestExample>
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/capabilities' \
+--header 'accessKey: <your_api_key>'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "productName": "Interpretation",
+    "rateVersion": "interp-2026-09-27-v1",
+    "languageCatalogVersion": "1",
+    "languageCatalogState": "CONFIGURED",
+    "formatCatalogVersion": "1",
+    "languages": [ { "languageKey": "es", "displayName": "Spanish", "sourceSupport": "UNVERIFIED" }, { "languageKey": "fr", "displayName": "French", "sourceSupport": "UNVERIFIED" } ],
+    "audioFormats": ["mp3", "wav", "m4a", "aac", "flac", "aiff", "ogg", "oga", "opus", "weba"],
+    "videoFormats": ["mp4", "mov", "m4v", "mkv", "avi", "webm", "wmv", "mpeg", "mpg", "3gpp"],
+    "exportFormats": ["mp3", "wav", "flac", "mp4"],
+    "maxSourceBytes": "3221225472",
+    "planRates": [ { "planKey": "PRO", "charactersPerMinutePerLanguage": 4000 } ],
+    "quoteTtlSeconds": 600,
+    "account": {
+      "planKey": "PRO",
+      "accessState": "ENABLED",
+      "entitlementVersion": "1",
+      "charactersPerMinutePerLanguage": 4000,
+      "availableCharacters": "10500",
+      "balanceState": "AVAILABLE"
+    },
+    "stageAvailability": { "project": "AVAILABLE", "upload": "AVAILABLE", "export": "AVAILABLE" },
+    "requestId": "..."
+  }
+}
+```
+
+</ResponseExample>
+
+### Common errors
+
+- `code = 401`, `"Key verification failed"`: the `accessKey` is missing, invalid or disabled. Returned with HTTP `200` and **no** `data`.
+- `code = 47128`: the account's plan is not entitled to generate (for example `FREE`).
+- `code = 47119`: an ENTERPRISE account has no configured contract rate. Interpretation does **not** fall back to a default rate.

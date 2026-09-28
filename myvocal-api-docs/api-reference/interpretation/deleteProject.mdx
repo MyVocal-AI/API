@@ -1,0 +1,52 @@
+---
+title: "Delete an interpretation project"
+api: "DELETE https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/{projectId}"
+description: "Delete an Interpretation project owned by your account."
+---
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Path
+
+<ParamField path="projectId" type="string" required>
+  The project identifier.
+</ParamField>
+
+### Response
+
+A success envelope with no data payload.
+
+<RequestExample>
+
+```bash
+curl --location --request DELETE 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/ip_...' \
+--header 'accessKey: <your_api_key>'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "code": 1,
+  "message": "success",
+  "data": null,
+  "requestId": "..."
+}
+```
+
+</ResponseExample>
+
+<Info>
+Deletion is scoped to your ownership. Deleting a project does not retroactively change what the ledger already settled, and it does not cancel work that is still reconciling.
+</Info>
+
+### Common errors
+
+- `code = 47102`: the project does not exist **or** is not owned by your account.
+- `code = 47122`: temporarily unavailable — retry with backoff.
