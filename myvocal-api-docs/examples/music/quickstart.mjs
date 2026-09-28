@@ -27,8 +27,70 @@
 import { randomBytes, randomInt } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const MUSIC_PATH = "/sound_clone/api/v1/music";
+
+// MPEG audio frame tables (MPEG 1 / MPEG 2 / MPEG 2.5). A real MP3 is accepted only when the
+// payload actually starts with a decodable frame (possibly after an ID3v2 tag), so a WAV file or
+// arbitrary bytes that merely contain a 0xFF byte are not mistaken for MP3.
+const MPEG_BITRATES = {
+  "3,3": [32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448],
+  "3,2": [32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384],
+  "3,1": [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320],
+  "2,3": [32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256],
+  "2,2": [8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160],
+  "2,1": [8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160],
+};
+const MPEG_SAMPLE_RATES = { 3: [44100, 48000, 32000], 2: [22050, 24000, 16000], 0: [11025, 12000, 8000] };
+
+export function mpegFrameLength(payload, offset) {
+  if (offset + 4 > payload.length) return null;
+  const b0 = payload[offset];
+  const b1 = payload[offset + 1];
+  const b2 = payload[offset + 2];
+  const b3 = payload[offset + 3];
+  if (b0 !== 0xff || (b1 & 0xe0) !== 0xe0) return null;
+  const version = (b1 >> 3) & 0x03; // 0 = MPEG 2.5, 1 = reserved, 2 = MPEG 2, 3 = MPEG 1
+  const layer = (b1 >> 1) & 0x03; // 0 = reserved, 1 = Layer III, 2 = Layer II, 3 = Layer I
+  if (version === 1 || layer === 0) return null;
+  const bitrateIndex = (b2 >> 4) & 0x0f;
+  const sampleIndex = (b2 >> 2) & 0x03;
+  if (bitrateIndex === 0 || bitrateIndex === 15 || sampleIndex === 3 || (b3 & 0x03) === 2) return null;
+  const bitrate = MPEG_BITRATES[`${version === 3 ? 3 : 2},${layer}`][bitrateIndex - 1];
+  const sampleRate = MPEG_SAMPLE_RATES[version][sampleIndex];
+  const padding = (b2 >> 1) & 0x01;
+  if (layer === 3) return (Math.floor(12 * bitrate * 1000 / sampleRate) + padding) * 4;
+  const coefficient = layer === 1 && version !== 3 ? 72 : 144;
+  return Math.floor(coefficient * bitrate * 1000 / sampleRate) + padding;
+}
+
+function startsWithMpegFrame(payload, offset) {
+  const length = mpegFrameLength(payload, offset);
+  if (length === null || offset + length > payload.length) return false;
+  const following = offset + length;
+  if (following === payload.length) return true;
+  return mpegFrameLength(payload, following) !== null;
+}
+
+function id3v2Length(header) {
+  if (header.length < 10 || ![2, 3, 4].includes(header[3])) return null;
+  const size = ((header[6] & 0x7f) << 21) | ((header[7] & 0x7f) << 14)
+    | ((header[8] & 0x7f) << 7) | (header[9] & 0x7f);
+  return 10 + size + ((header[5] & 0x10) ? 10 : 0);
+}
+
+export function looksLikeMpeg(payload) {
+  if (startsWithMpegFrame(payload, 0)) return true;
+  if (payload.length >= 10) {
+    const magic = payload.subarray(0, 3).toString("latin1");
+    if (magic === "ID3" || (payload[0] === 0 && payload[1] === 0 && payload[2] === 0)) {
+      const tagLength = id3v2Length(payload.subarray(0, 10));
+      if (tagLength !== null && startsWithMpegFrame(payload, tagLength)) return true;
+    }
+  }
+  return false;
+}
 
 class ApiError extends Error {
   constructor(code, message, details, httpStatus) {
@@ -137,15 +199,7 @@ class Client {
       throw new ApiError(-1, `unexpected content type ${contentType} for the audio download`);
     }
     if (payload.length === 0) throw new ApiError(-1, "audio body was empty");
-    // An MP3 may carry a leading ID3v2 tag before its first frame, and a production pipeline can
-    // leave the tag's magic bytes nonstandard, so scan a bounded prefix for a valid frame sync
-    // instead of only checking offset 0. Text/JSON error pages contain no 0xFF byte.
-    const head = payload.subarray(0, 8192);
-    let looksLikeMpeg = head.subarray(0, 3).toString("latin1") === "ID3";
-    for (let index = 0; !looksLikeMpeg && index + 1 < head.length; index += 1) {
-      looksLikeMpeg = head[index] === 0xff && (head[index + 1] & 0xe0) === 0xe0;
-    }
-    if (!looksLikeMpeg) throw new ApiError(-1, "payload does not contain an MPEG audio frame");
+    if (!looksLikeMpeg(payload)) throw new ApiError(-1, "payload does not contain a valid MPEG audio frame");
     return { contentType, payload };
   }
 }
@@ -308,16 +362,19 @@ async function main() {
   console.log("OK: Text-to-Music quickstart completed");
 }
 
-main().catch((error) => {
-  if (error instanceof ApiError) {
+const entryUrl = process.argv[1] ? pathToFileURL(process.argv[1]).href : "";
+if (import.meta.url === entryUrl) {
+  main().catch((error) => {
+    if (error instanceof ApiError) {
+      console.error(`FAILED: ${error.message}`);
+      if (error.code === 401) console.error("The accessKey was rejected; check MYVOCAL_API_KEY.");
+      process.exit(1);
+    }
+    if (error instanceof TimeoutFailure) {
+      console.error(`TIMEOUT: ${error.message}`);
+      process.exit(2);
+    }
     console.error(`FAILED: ${error.message}`);
-    if (error.code === 401) console.error("The accessKey was rejected; check MYVOCAL_API_KEY.");
     process.exit(1);
-  }
-  if (error instanceof TimeoutFailure) {
-    console.error(`TIMEOUT: ${error.message}`);
-    process.exit(2);
-  }
-  console.error(`FAILED: ${error.message}`);
-  process.exit(1);
-});
+  });
+}

@@ -189,16 +189,8 @@ class Client:
             raise ApiError(-1, "unexpected content type %s for the audio download" % content_type)
         if not payload:
             raise ApiError(-1, "audio body was empty")
-        # An MP3 may carry a leading ID3v2 tag before its first frame, and a production
-        # pipeline can leave the tag's magic bytes nonstandard, so scan a bounded prefix for a
-        # valid frame sync instead of only checking offset 0. Text/JSON error pages contain no
-        # 0xFF byte and are still rejected.
-        head = payload[:8192]
-        looks_like_mpeg = head.startswith(b"ID3") or any(
-            head[index] == 0xFF and (head[index + 1] & 0xE0) == 0xE0
-            for index in range(len(head) - 1))
-        if not looks_like_mpeg:
-            raise ApiError(-1, "payload does not contain an MPEG audio frame")
+        if not _looks_like_mpeg(payload):
+            raise ApiError(-1, "payload does not contain a valid MPEG audio frame")
         return content_type, payload
 
 
@@ -351,6 +343,85 @@ def _read_bounded(reader, deadline, timeout, what, tracking=None):
     if tracking is not None and tracking.expired:
         raise RequestTimeout("%s timed out after %.0fs" % (what, timeout))
     return b"".join(chunks)
+
+
+# MPEG audio frame tables (MPEG 1 / MPEG 2 / MPEG 2.5). A real MP3 is accepted only when the
+# payload actually starts with a decodable frame (possibly after an ID3v2 tag), so a WAV file or
+# arbitrary bytes that merely contain a 0xFF byte are not mistaken for MP3.
+_MPEG_BITRATES = {
+    (3, 3): (32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448),
+    (3, 2): (32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384),
+    (3, 1): (32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320),
+    (2, 3): (32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256),
+    (2, 2): (8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160),
+    (2, 1): (8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160),
+}
+_MPEG_SAMPLE_RATES = {3: (44100, 48000, 32000), 2: (22050, 24000, 16000), 0: (11025, 12000, 8000)}
+
+
+def _mpeg_frame_length(payload, offset):
+    """Byte length of a valid MPEG audio frame at `offset`, or None.
+
+    Version, layer, bitrate and sample-rate fields must all be valid, which rejects arbitrary
+    bytes that only happen to contain a sync pattern.
+    """
+    if offset + 4 > len(payload):
+        return None
+    b0, b1, b2, b3 = payload[offset], payload[offset + 1], payload[offset + 2], payload[offset + 3]
+    if b0 != 0xFF or (b1 & 0xE0) != 0xE0:
+        return None
+    version = (b1 >> 3) & 0x03          # 0 = MPEG 2.5, 1 = reserved, 2 = MPEG 2, 3 = MPEG 1
+    layer = (b1 >> 1) & 0x03            # 0 = reserved, 1 = Layer III, 2 = Layer II, 3 = Layer I
+    if version == 1 or layer == 0:
+        return None
+    bitrate_index = (b2 >> 4) & 0x0F
+    sample_index = (b2 >> 2) & 0x03
+    if bitrate_index in (0, 15) or sample_index == 3 or (b3 & 0x03) == 2:
+        return None
+    bitrate = _MPEG_BITRATES[(3 if version == 3 else 2, layer)][bitrate_index - 1]
+    sample_rate = _MPEG_SAMPLE_RATES[version][sample_index]
+    padding = (b2 >> 1) & 0x01
+    if layer == 3:
+        return (12 * bitrate * 1000 // sample_rate + padding) * 4
+    coefficient = 72 if (layer == 1 and version != 3) else 144
+    return coefficient * bitrate * 1000 // sample_rate + padding
+
+
+def _starts_with_mpeg_frame(payload, offset):
+    """True when a complete frame sits at `offset` and is followed by another valid frame (or
+    ends the payload exactly)."""
+    length = _mpeg_frame_length(payload, offset)
+    if length is None or offset + length > len(payload):
+        return False
+    following = offset + length
+    if following == len(payload):
+        return True
+    return _mpeg_frame_length(payload, following) is not None
+
+
+def _id3v2_length(header):
+    """Total ID3v2 tag length from its first 10 bytes, or None.
+
+    The magic may be ``ID3`` or, for assets the older pipeline already damaged, three zero bytes;
+    the declared size still has to be structurally valid.
+    """
+    if len(header) < 10 or header[3] not in (2, 3, 4):
+        return None
+    size = ((header[6] & 0x7F) << 21) | ((header[7] & 0x7F) << 14) \
+        | ((header[8] & 0x7F) << 7) | (header[9] & 0x7F)
+    return 10 + size + (10 if (header[5] & 0x10) else 0)
+
+
+def _looks_like_mpeg(payload):
+    """True only for a real MPEG audio stream: a valid frame at offset 0, or after a leading
+    ID3v2 tag. WAV/HTML/JSON and arbitrary bytes with a stray 0xFF are rejected."""
+    if _starts_with_mpeg_frame(payload, 0):
+        return True
+    if len(payload) >= 10 and payload[:3] in (b"ID3", b"\x00\x00\x00"):
+        tag_length = _id3v2_length(payload[:10])
+        if tag_length is not None and _starts_with_mpeg_frame(payload, tag_length):
+            return True
+    return False
 
 
 def jittered_delay(next_poll_after_ms):
