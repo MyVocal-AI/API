@@ -189,10 +189,16 @@ class Client:
             raise ApiError(-1, "unexpected content type %s for the audio download" % content_type)
         if not payload:
             raise ApiError(-1, "audio body was empty")
-        head = payload[:16]
-        looks_like_mpeg = head.startswith(b"ID3") or (len(head) > 1 and head[0] == 0xFF and (head[1] & 0xE0) == 0xE0)
+        # An MP3 may carry a leading ID3v2 tag before its first frame, and a production
+        # pipeline can leave the tag's magic bytes nonstandard, so scan a bounded prefix for a
+        # valid frame sync instead of only checking offset 0. Text/JSON error pages contain no
+        # 0xFF byte and are still rejected.
+        head = payload[:8192]
+        looks_like_mpeg = head.startswith(b"ID3") or any(
+            head[index] == 0xFF and (head[index + 1] & 0xE0) == 0xE0
+            for index in range(len(head) - 1))
         if not looks_like_mpeg:
-            raise ApiError(-1, "payload does not start with an MPEG audio signature")
+            raise ApiError(-1, "payload does not contain an MPEG audio frame")
         return content_type, payload
 
 

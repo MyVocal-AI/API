@@ -137,10 +137,15 @@ class Client {
       throw new ApiError(-1, `unexpected content type ${contentType} for the audio download`);
     }
     if (payload.length === 0) throw new ApiError(-1, "audio body was empty");
-    const head = payload.subarray(0, 16);
-    const looksLikeMpeg = head.subarray(0, 3).toString("latin1") === "ID3"
-      || (head.length > 1 && head[0] === 0xff && (head[1] & 0xe0) === 0xe0);
-    if (!looksLikeMpeg) throw new ApiError(-1, "payload does not start with an MPEG audio signature");
+    // An MP3 may carry a leading ID3v2 tag before its first frame, and a production pipeline can
+    // leave the tag's magic bytes nonstandard, so scan a bounded prefix for a valid frame sync
+    // instead of only checking offset 0. Text/JSON error pages contain no 0xFF byte.
+    const head = payload.subarray(0, 8192);
+    let looksLikeMpeg = head.subarray(0, 3).toString("latin1") === "ID3";
+    for (let index = 0; !looksLikeMpeg && index + 1 < head.length; index += 1) {
+      looksLikeMpeg = head[index] === 0xff && (head[index + 1] & 0xe0) === 0xe0;
+    }
+    if (!looksLikeMpeg) throw new ApiError(-1, "payload does not contain an MPEG audio frame");
     return { contentType, payload };
   }
 }
