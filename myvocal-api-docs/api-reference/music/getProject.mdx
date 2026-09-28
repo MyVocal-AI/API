@@ -53,7 +53,7 @@ This is the main polling endpoint for Text-to-Music.
 </ResponseField>
 
 <ResponseField name="activeJob" type="object | null">
-  `{ jobId, jobType, status, attemptCount, createdAt, updatedAt, displayStage, terminal }`.
+  `{ jobId, jobType, status, attemptCount, createdAt, updatedAt, displayStage, terminal }`. `attemptCount` is a decimal **string** for an `ARRANGEMENT` job (for example `"0"`) and `null` for a `SONG` job.
 </ResponseField>
 
 <ResponseField name="readyAsset" type="object | null">

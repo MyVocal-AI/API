@@ -46,8 +46,8 @@ description: "Read the progress of an arrangement or song job."
   Populated when the job failed.
 </ResponseField>
 
-<ResponseField name="attemptCount" type="number | null">
-  How many attempts this job has had. `null` for song jobs.
+<ResponseField name="attemptCount" type="string | null">
+  How many delivery attempts this `ARRANGEMENT` job has had, as a decimal **string** (for example `"0"` or `"3"`). `null` for `SONG` jobs, which do not use the arrangement retry counter.
 </ResponseField>
 
 <ResponseField name="createdAt" type="string">
