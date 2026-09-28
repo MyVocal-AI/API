@@ -32,8 +32,10 @@ import json
 import os
 import random
 import secrets
+import socket
 import string
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -100,27 +102,42 @@ class Client:
     def _send(self, request, what):
         """One HTTP request under one absolute time budget. Network failures stay failures.
 
-        A socket timeout only bounds one idle wait; a response that keeps trickling bytes
-        would extend it indefinitely, so the body is read against a real deadline. Header
-        lookup stays on HTTPMessage, which is case-insensitive for Content-Type.
+        The budget covers the whole exchange: connecting, the status line and headers, and the
+        body. A socket timeout alone only bounds one receive, so a peer that keeps trickling
+        header or body bytes could hold the call open forever: the live socket is shut down at
+        the deadline (_RequestDeadline) and the body is read against the same deadline
+        (_read_bounded). Header lookup stays on HTTPMessage, which is case-insensitive for
+        Content-Type.
         """
         timeout = self.config.request_timeout
         deadline = time.monotonic() + timeout
+        tracking = _RequestDeadline(timeout)
+        tracking.start()
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                return response.status, response.headers, _read_bounded(response, deadline, timeout, what)
-        except urllib.error.HTTPError as failure:
             try:
-                body = _read_bounded(failure, deadline, timeout, what)
-            except RequestTimeout as expired:
-                raise ApiError(-1, str(expired), None, None)
-            return failure.code, failure.headers, body
+                response = _open_bounded(request, timeout, tracking)
+            except urllib.error.HTTPError as failure:
+                try:
+                    return failure.code, failure.headers, _read_bounded(failure, deadline, timeout,
+                                                                        what, tracking)
+                finally:
+                    failure.close()
+            try:
+                return response.status, response.headers, _read_bounded(
+                    response, deadline, timeout, what, tracking)
+            finally:
+                response.close()
         except RequestTimeout as expired:
             raise ApiError(-1, str(expired), None, None)
         except (urllib.error.URLError, OSError, http.client.HTTPException) as failure:
+            if time.monotonic() >= deadline:
+                # The deadline shut the request socket down, so this is a timeout, not a drop.
+                raise ApiError(-1, "%s timed out after %.0fs" % (what, timeout), None, None)
             # A dropped/reset connection is a normal transport failure, not a crash.
             raise ApiError(-1, "%s failed: %s (re-run to resume the same operation)" % (what, failure),
                            None, None)
+        finally:
+            tracking.stop()
 
     def call(self, method, path, body=None, idempotency_key=None):
         """Success requires BOTH a 2xx status and JSON code == 1."""
@@ -192,12 +209,112 @@ def _socket_for(reader):
     return None
 
 
-def _read_bounded(reader, deadline, timeout, what):
+class _RequestDeadline:
+    """Shuts one request's live socket down when its absolute budget expires.
+
+    urllib applies `timeout` only as a per-receive socket timeout. A peer that keeps trickling
+    bytes while the status line or the headers are still incomplete never trips it, so the
+    call can block far past the budget. This keeps a reference to the request socket and
+    closes it at the deadline, which makes the blocked read raise and lets the caller report a
+    timeout and release the connection instead of waiting forever.
+    """
+
+    def __init__(self, timeout):
+        self._lock = threading.Lock()
+        self._socket = None
+        self._expired = False
+        self._timer = threading.Timer(timeout, self._expire)
+
+    @property
+    def expired(self):
+        return self._expired
+
+    def start(self):
+        self._timer.daemon = True
+        self._timer.start()
+
+    def stop(self):
+        self._timer.cancel()
+
+    def track(self, sock):
+        """Register the connected socket; close it at once if the budget already expired."""
+        with self._lock:
+            expired = self._expired
+            if not expired:
+                self._socket = sock
+        if expired:
+            _close_socket(sock)
+
+    def _expire(self):
+        with self._lock:
+            self._expired = True
+            sock, self._socket = self._socket, None
+        _close_socket(sock)
+
+
+def _close_socket(sock):
+    """Best-effort shutdown/close of the in-flight socket from the deadline timer."""
+    if sock is None:
+        return
+    try:
+        sock.shutdown(socket.SHUT_RDWR)
+    except OSError:
+        pass
+    try:
+        sock.close()
+    except OSError:
+        pass
+
+
+def _tracked_connection(base, tracking):
+    """An HTTP(S) connection that registers its final socket for deadline enforcement.
+
+    Tracking happens after `connect()` completes, so an HTTPS socket is the wrapped TLS
+    socket and a proxy tunnel is already established.
+    """
+
+    class TrackedConnection(base):
+        def connect(self):
+            super().connect()
+            tracking.track(self.sock)
+
+    return TrackedConnection
+
+
+class _DeadlineHTTPHandler(urllib.request.HTTPHandler):
+    def __init__(self, tracking):
+        super().__init__()
+        self._tracking = tracking
+
+    def http_open(self, request):
+        return self.do_open(_tracked_connection(http.client.HTTPConnection, self._tracking), request)
+
+
+class _DeadlineHTTPSHandler(urllib.request.HTTPSHandler):
+    def __init__(self, tracking, context=None):
+        super().__init__(context=context)
+        self._tracking = tracking
+
+    def https_open(self, request):
+        return self.do_open(_tracked_connection(http.client.HTTPSConnection, self._tracking), request,
+                            context=self._context)
+
+
+def _open_bounded(request, timeout, tracking):
+    """urlopen under a budget that also covers the response status line and headers."""
+    opener = urllib.request.build_opener(_DeadlineHTTPHandler(tracking),
+                                         _DeadlineHTTPSHandler(tracking))
+    return opener.open(request, timeout=timeout)
+
+
+def _read_bounded(reader, deadline, timeout, what, tracking=None):
     """Read a whole body under one absolute deadline.
 
     The remaining budget is re-checked before every chunk and re-applied as the socket
     timeout, and only single-receive reads (`read1`) are used: a plain `read(n)` would keep
-    blocking until n bytes even while the peer drips one byte at a time.
+    blocking until n bytes even while the peer drips one byte at a time. When the deadline
+    timer already shut the socket down, a body that ends at EOF must still be reported as a
+    timeout instead of a truncated success.
     """
     read_some = getattr(reader, "read1", None) or getattr(getattr(reader, "fp", None), "read1", None)
     if read_some is None:
@@ -225,6 +342,8 @@ def _read_bounded(reader, deadline, timeout, what):
         if not chunk:
             break
         chunks.append(chunk)
+    if tracking is not None and tracking.expired:
+        raise RequestTimeout("%s timed out after %.0fs" % (what, timeout))
     return b"".join(chunks)
 
 
