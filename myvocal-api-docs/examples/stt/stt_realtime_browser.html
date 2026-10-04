@@ -48,7 +48,7 @@ function socketUrl(path) {
 
 // One session's live state. `generation` invalidates the previous session's timers and handlers.
 let socket = null, context = null, worklet = null, stream = null, session = null;
-let captured = 0, terminal = null, finisher = null, drained = false, generation = 0;
+let captured = 0, terminal = null, finisher = null, drained = false, drainState = 'none', generation = 0;
 
 // The capture worklet counts every frame it posts. On `stop` it confirms it flushed its own queue
 // with a final `stopped` message, so the main thread knows the tail is complete before it finishes.
@@ -102,6 +102,7 @@ async function start() {
   terminal = null;
   captured = 0;
   drained = false;
+  drainState = 'none';
 
   const probe = new AudioContext();
   const rate = ENCODINGS[probe.sampleRate];
@@ -119,6 +120,13 @@ async function start() {
     if (event.eventType === 'session.completed') { terminal = 'COMPLETED'; release(); }
     if (event.eventType === 'session.error') { terminal = event.payload.errorCode; release(); }
   };
+  // A transport close (for example 1006) during the session must release the microphone and the
+  // capture graph too, not only a protocol-level error event.
+  socket.onclose = () => {
+    if (myGen !== generation) return;
+    if (!terminal) terminal = 'TRANSPORT_CLOSED';
+    release();
+  };
   await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
 
   context = new AudioContext();
@@ -128,7 +136,7 @@ async function start() {
   worklet.port.onmessage = (event) => {
     if (myGen !== generation) return;
     const data = event.data;
-    if (data && data.type === 'stopped') { drained = true; return; }
+    if (data && data.type === 'stopped') { drained = true; drainState = 'confirmed'; return; }
     const samples = data && data.type === 'audio' ? data.samples : data;
     if (!samples || !socket || socket.readyState !== WebSocket.OPEN) return;
     socket.send(JSON.stringify({
@@ -152,9 +160,15 @@ function stop() {
   const deadline = Date.now() + 2000;
   const tryFinish = () => {
     if (myGen !== generation) return;
-    // `drained` is the worklet's confirmation that every captured frame was delivered; the deadline
-    // is only a bound so a stopped worklet cannot stall the finish forever.
-    if (drained || Date.now() > deadline) { finish(myGen); return; }
+    if (drained) { finish(myGen); return; }
+    if (Date.now() > deadline) {
+      // The deadline is only a bound. Without the worklet's flush confirmation the tail is not proven
+      // complete, so the exit reports it instead of claiming a fully drained capture.
+      drainState = 'timeout';
+      log('drain: no worklet confirmation before the deadline; the tail may be incomplete');
+      finish(myGen);
+      return;
+    }
     setTimeout(tryFinish, 20);
   };
   setTimeout(tryFinish, 20);

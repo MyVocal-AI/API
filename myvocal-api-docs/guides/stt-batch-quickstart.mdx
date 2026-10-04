@@ -51,7 +51,7 @@ curl -s https://api.myvocal.ai/sound_clone/api/v1/stt/uploads/$UPLOAD_ID/complet
 ```
 
 See [Create an upload](/api-reference/stt/createUpload) for the response fields (`partSizeBytes`,
-`totalParts`, `partUrl`, `media`). Complete the upload before submitting, or the submit is refused.
+`totalParts`, `url`, `media`). Complete the upload before submitting, or the submit is refused.
 
 ## 3. Submit the transcription
 
@@ -130,9 +130,27 @@ Enable a signed callback inside the same `options` block:
   addresses are refused on the real connection.
 - `notificationSigningSecret` is write-only: it is stored encrypted and never returned or logged.
   Changing the URL or the secret under the same `Idempotency-Key` is a different request.
-- MyVocal posts at least once with a bounded exponential backoff and a stable `eventId`. Verify each
-delivery by recomputing the HMAC over the raw request body with your secret and comparing the
-signature header, then de-duplicate by `eventId`.
+- MyVocal posts at least once with a bounded exponential backoff and a stable `eventId`. Each
+delivery carries three MyVocal headers:
+
+  | Header | Meaning |
+  |---|---|
+  | `X-MyVocal-Timestamp` | The signing timestamp. |
+  | `X-MyVocal-Signature` | `v1=<hex HMAC-SHA256(secret, timestamp + "." + rawBody)>`. |
+  | `X-MyVocal-Event-Id` | The stable event id, for de-duplication. |
+
+  Read the timestamp from `X-MyVocal-Timestamp`, then compute the HMAC over the **concatenation of
+  the timestamp, a `.` and the raw request body bytes**:
+
+  ```python
+  import hashlib, hmac
+  def verify(secret: bytes, timestamp: str, raw_body: bytes, header: str) -> bool:
+      expected = hmac.new(secret, timestamp.encode() + b"." + raw_body, hashlib.sha256).hexdigest()
+      return hmac.compare_digest("v1=" + expected, header)
+  ```
+
+  Verify against the **raw bytes exactly as received**; do not re-serialize the JSON, and do not sign
+  the body without the timestamp prefix. Then de-duplicate by `X-MyVocal-Event-Id`.
 - **Polling is the authoritative result.** A missed or failed callback never changes the task; do not
   retry the transcription because a callback was missed.
 
