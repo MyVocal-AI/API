@@ -33,9 +33,25 @@ step.
 ```bash
 UPLOAD=$(curl -s https://api.myvocal.ai/sound_clone/api/v1/stt/uploads \
   -H "accessKey: $MYVOCAL_ACCESS_KEY" -H "Content-Type: application/json" \
-  -d '{"fileName":"meeting.wav","fileSizeBytes":5242880}')
-echo "$UPLOAD"
+  -d '{"fileName":"meeting.wav","sizeBytes":5242880}')
+UPLOAD_ID=$(echo "$UPLOAD" | python -c "import json,sys;print(json.load(sys.stdin)['data']['uploadId'])")
 ```
+
+The request field is `sizeBytes` (the response reports the stored size separately). For each returned
+part, ask for a presigned URL and upload the bytes:
+
+```bash
+# partNumber starts at 1 and runs to totalParts
+curl -s https://api.myvocal.ai/sound_clone/api/v1/stt/uploads/$UPLOAD_ID/parts/1 \
+  -H "accessKey: $MYVOCAL_ACCESS_KEY" -X POST
+# PUT the returned part bytes, then complete:
+curl -s https://api.myvocal.ai/sound_clone/api/v1/stt/uploads/$UPLOAD_ID/complete \
+  -H "accessKey: $MYVOCAL_ACCESS_KEY" -H "Content-Type: application/json" \
+  -d '{"parts":[{"partNumber":1,"etag":"<etag>"}]}'
+```
+
+See [Create an upload](/api-reference/stt/createUpload) for the response fields (`partSizeBytes`,
+`totalParts`, `partUrl`, `media`). Complete the upload before submitting, or the submit is refused.
 
 ## 3. Submit the transcription
 
@@ -63,11 +79,67 @@ curl https://api.myvocal.ai/sound_clone/api/v1/stt/transcriptions \
   `txt`, `json`, `srt`, `segmented_json`, `html`, `docx` or `pdf`.
 </Card>
 
+## Options and export controls
+
+`options` carries the full Batch surface. A representative request:
+
+```json
+{
+  "uploadId": "<uploadId>",
+  "languageHint": "en",
+  "title": "Weekly sync",
+  "waitForCompletion": false,
+  "options": {
+    "separateSpeakers": true,
+    "maxSpeakerCount": 4,
+    "alignmentLevel": "WORD",
+    "entityCategories": ["pii", "phone"],
+    "removeDisfluencies": true,
+    "vocabularyHints": ["MyVocal", "Kubernetes"],
+    "separateChannels": false,
+    "exportFormats": ["txt", "json", "srt"],
+    "exportOptions": [
+      { "format": "srt", "maxCharactersPerLine": 42, "maxSegmentDurationS": 6 },
+      { "format": "json", "includeTimestamps": true, "includeSpeakers": true }
+    ]
+  }
+}
+```
+
+Every accepted field and enum is returned by [capabilities](/api-reference/stt/capabilities) under
+`requestParameters`. `exportFormats` selects the artefacts; each `exportOptions` entry applies nested
+controls to one format and does not change another. An unsupported combination is refused at submit
+with `INPUT_INVALID` rather than silently ignored.
+
+## Completion notifications
+
+Enable a signed callback inside the same `options` block:
+
+```json
+{
+  "options": {
+    "notifyOnCompletion": true,
+    "notifyUrl": "https://customer.example/stt-callback",
+    "clientMetadata": { "job": "weekly-sync" },
+    "notificationSigningSecret": "<write-only secret>"
+  }
+}
+```
+
+- `notifyUrl` must be a public `http`/`https` URL; private, loopback, link-local and cloud-metadata
+  addresses are refused on the real connection.
+- `notificationSigningSecret` is write-only: it is stored encrypted and never returned or logged.
+  Changing the URL or the secret under the same `Idempotency-Key` is a different request.
+- MyVocal posts at least once with a bounded exponential backoff and a stable `eventId`. Verify each
+delivery by recomputing the HMAC over the raw request body with your secret and comparing the
+signature header, then de-duplicate by `eventId`.
+- **Polling is the authoritative result.** A missed or failed callback never changes the task; do not
+  retry the transcription because a callback was missed.
+
 ## Complete example
 
-<Card title="Python batch example" icon="python" href="/examples/stt/stt_batch_minimal">
-  Upload, submit, poll and download a file.
-</Card>
+The runnable clients implement this whole flow (upload, submit, poll, download):
+[`examples/stt/stt_batch_minimal.py`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/stt/stt_batch_minimal.py).
 
 Read [Characters and quotes](/guides/characters-and-quotes) for how the charge and the shared balance
 work, and [Asynchronous jobs and retries](/guides/async-jobs-and-retries) for retry rules.

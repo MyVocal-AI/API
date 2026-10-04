@@ -19,8 +19,8 @@ The server probes the file and builds the canonical audio used for the transcrip
   The original file name, used for the History title default.
 </ParamField>
 
-<ParamField body="fileSizeBytes" type="number" required>
-  The exact file size in bytes, within the technical upload ceiling.
+<ParamField body="sizeBytes" type="number" required>
+  The exact file size in bytes, within the technical upload ceiling. This is the request field; the response reports the stored size as `media`/`fileSizeBytes`.
 </ParamField>
 
 ### Response

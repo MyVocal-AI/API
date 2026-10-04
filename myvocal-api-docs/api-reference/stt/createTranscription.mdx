@@ -46,25 +46,26 @@ reserves Characters and starts the asynchronous task in a single request.
   Optional model identifier; defaults to `myvocal_stt_v1`.
 </ParamField>
 
-<ParamField body="notifyUrl" type="string">
-  A public URL to receive a signed completion callback. Polling stays the authoritative result.
-</ParamField>
-
-<ParamField body="notificationSigningSecret" type="string">
-  A write-only secret used to sign the callback. It is stored encrypted and never returned.
-</ParamField>
-
 <ParamField body="options" type="object">
   The full option surface: `separateSpeakers`, `maxSpeakerCount`, `alignmentLevel`, `entityCategories`,
   `redactCategories`, `redactionStyle`, `rewriteInstruction`, `removeDisfluencies`,
   `identifyConversationRoles`, `vocabularyHints`, `separateChannels`, `channelResultMode`,
   `exportFormats`, `inputEncoding`, `processingContentStorage` and more. Option combinations that the
   model does not support are refused at submit with `INPUT_INVALID` rather than silently dropped.
+  Completion notifications are options too: `options.notifyOnCompletion` (`true` to enable),
+  `options.notifyUrl` (a public URL MyVocal posts the signed event to), `options.clientMetadata`
+  (opaque caller data echoed back) and `options.notificationSigningSecret` (the write-only HMAC
+  key). Polling stays the authoritative result.
   See [capabilities](/api-reference/stt/capabilities) for the live list.
 </ParamField>
 
-<ParamField body="waitMs" type="number">
-  Optionally wait up to this bounded time for a result inside the same request.
+<ParamField body="waitForCompletion" type="boolean">
+  When `true`, this call waits for a terminal state inside the same request.
+</ParamField>
+
+<ParamField body="waitTimeoutMs" type="number">
+  The wait budget in milliseconds. If the task is still running at the budget, the request
+  returns the task with its identity; it is not cancelled.
 </ParamField>
 
 ### Response

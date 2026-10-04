@@ -59,14 +59,49 @@ each with an `eventId`, `sessionId` and a monotonic `sequence`.
   The terminal call; a repeated finish returns the same task and never charges twice.
 </Card>
 
+## 5. Events in detail
+
+Client to server, each as `{ "eventType", "epoch", "payload" }`:
+
+| `eventType` | `payload` |
+|---|---|
+| `audio.append` | `audioBase64` (the frame in the declared encoding), `sampleOffset` (samples already sent), `capturedSamples` (total captured), optional `precedingText` |
+| `segment.commit` | `capturedSamples` |
+| `session.pause` / `session.resume` | `capturedSamples` |
+| `session.finish` | `capturedSamples` |
+
+Server to client, each as `{ "eventId", "sessionId", "sequence", "eventType", "payload" }`:
+
+| `eventType` | `payload` |
+|---|---|
+| `session.ready` | the current session view (epoch, cursors, `accepting`) |
+| `transcript.delta` | `text` (temporary; replaces the previous delta) |
+| `transcript.final` | `id`, `text`, `revisedText`, `languageCode`, `languageProbability`, `entities`, `words`, `characterAlignments` |
+| `transcript.revision` | `id`, `text`, `revisedText` (the edited transcript arrived for that line) |
+| `transcript.entities` | `id`, `entities` (detected entities for that line) |
+| `transcript.alignment` | `id`, `languageCode`, `languageProbability`, `words` (late language/alignment) |
+| `usage.updated` | `estimatedCharacters`, `billableCharacters`, `elapsedMs`, `sentSamples`, `receivedSamples`, `capturedSamples` (all decimal strings), `accepting`, `epoch`, and `rotate`/`errorCode` when present |
+| `session.notice` | `code`, `message` (for example `PROCESSING_STORAGE_NOT_APPLIED`) |
+| `session.completed` | the terminal session view |
+| `session.error` | `errorCode` (a MyVocal code) |
+
+All 64-bit quantities are decimal strings; `accepting`, `rotate` and `epoch` stay boolean/number.
+
+## 6. Rotation, recovery and errors
+
+- A `usage.updated` with `rotate: true` and `accepting: false` means the server wants a new segment:
+  call `session.pause`, then `session.resume` (a new `epoch`), and continue sending from the new
+  epoch. `session.ready` reports the live epoch and cursors so a reconnect knows where to resume.
+- A server `session.error` carries a stable MyVocal code (`INPUT_INVALID`, `PROVIDER_UNAVAILABLE`,
+  `INSUFFICIENT_CHARACTERS`, `TEMPORARILY_UNAVAILABLE`, …). A plain disconnect is not a successful
+  finish: reconnect and `session.finish` (or `session.resume` first) so the tail is committed.
+- A repeated frame at the same `sampleOffset`, a repeated `segment.commit` and a repeated
+  `session.finish` are idempotent; they neither double-count nor create a second task.
+
 ## Complete examples
 
-<Card title="Node.js real-time example" icon="node" href="/examples/stt/stt_realtime_minimal_mjs">
-  Server socket with the accessKey header.
-</Card>
-
-<Card title="Browser real-time example" icon="chrome" href="/examples/stt/stt_realtime_browser">
-  Microphone capture with a single-use ticket.
-</Card>
+- Node.js server socket: [`examples/stt/stt_realtime_minimal.mjs`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/stt/stt_realtime_minimal.mjs)
+- Python server socket: [`examples/stt/stt_realtime_minimal.py`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/stt/stt_realtime_minimal.py)
+- Browser microphone with a ticket: [`examples/stt/stt_realtime_browser.html`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/stt/stt_realtime_browser.html)
 
 Read [Characters and quotes](/guides/characters-and-quotes) for the billing rule.
