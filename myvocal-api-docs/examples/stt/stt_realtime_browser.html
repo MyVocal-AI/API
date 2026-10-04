@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>MyVocal real-time Speech to Text — browser example</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 2rem; max-width: 46rem; }
+  button { font: inherit; padding: .4rem .9rem; margin-right: .5rem; }
+  pre { background: #f4f4f5; padding: .75rem; overflow: auto; white-space: pre-wrap; }
+  input { font: inherit; padding: .35rem; width: 22rem; }
+</style>
+</head>
+<body>
+<h1>MyVocal real-time Speech to Text — browser client</h1>
+<p>
+  This page records microphone audio and streams it to MyVocal. It exchanges your
+  API key once for a short-lived ticket, then connects the socket with the ticket,
+  so the long-lived key never appears in a URL. Nothing is sent to any provider
+  from the browser. The session declares the microphone's real sample rate, so a
+  second of audio is a second of audio regardless of the device.
+</p>
+<p>
+  API base <input id="base" value="http://127.0.0.1:8080" /> and access key
+  <input id="key" type="password" placeholder="accessKey" />
+</p>
+<p>
+  <button id="start">Start recording</button>
+  <button id="stop" disabled>Stop and finish</button>
+</p>
+<pre id="log"></pre>
+
+<script>
+const log = (msg) => { document.getElementById('log').textContent += msg + "\n"; };
+const base = () => document.getElementById('base').value.replace(/\/$/, '');
+const key = () => document.getElementById('key').value;
+const rt = '/sound_clone/api/v1/stt/realtime';
+
+// MyVocal input encodings; the session is created for the microphone's real rate.
+const ENCODINGS = { 8000: 'pcm_s16le_8000', 16000: 'pcm_s16le_16000', 22050: 'pcm_s16le_22050',
+  24000: 'pcm_s16le_24000', 44100: 'pcm_s16le_44100', 48000: 'pcm_s16le_48000' };
+
+/** Builds the socket URL from the HTTP base and the returned path, for http or https. */
+function socketUrl(path) {
+  const url = new URL(base() + path);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  return url.toString();
+}
+
+let socket, context, worklet, stream, session, captured = 0, terminal = null;
+
+const workletCode = `
+class Capture extends AudioWorkletProcessor {
+  process(inputs) {
+    const input = inputs[0][0];
+    if (input) this.port.postMessage(input.slice(0));
+    return true;
+  }
+}
+registerProcessor('capture', Capture);`;
+
+async function rest(method, path, body) {
+  const response = await fetch(base() + path, {
+    method,
+    headers: Object.assign({ accessKey: key(), 'Content-Type': 'application/json' },
+      body ? { 'Idempotency-Key': crypto.randomUUID() } : {}),
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const payload = await response.json();
+  if (payload.code !== 1) throw new Error(`MyVocal error ${payload.code}: ${payload.message}`);
+  return payload.data;
+}
+
+function encodeFrame(samples) {
+  const pcm = new Int16Array(samples.length);
+  for (let i = 0; i < samples.length; i++) {
+    const clamped = Math.max(-1, Math.min(1, samples[i]));
+    pcm[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
+  }
+  let binary = '';
+  const bytes = new Uint8Array(pcm.buffer);
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+async function start() {
+  const probe = new AudioContext();
+  const rate = ENCODINGS[probe.sampleRate];
+  await probe.close();
+  if (!rate) throw new Error('unsupported microphone sample rate ' + probe.sampleRate);
+
+  session = await rest('POST', rt + '/sessions', {
+    languageHint: 'en', options: { inputEncoding: rate },
+  });
+  const ticket = await rest('POST', rt + '/sessions/' + encodeURIComponent(session.sessionId) + '/tickets');
+
+  socket = new WebSocket(socketUrl(ticket.streamUrl) + '?ticket=' + encodeURIComponent(ticket.ticket));
+  socket.onmessage = (message) => {
+    const event = JSON.parse(message.data);
+    if (event.eventType !== 'usage.updated') log(event.eventType + (event.payload.text ? ': ' + event.payload.text : ''));
+    if (event.eventType === 'session.completed') { terminal = 'COMPLETED'; release(); }
+    if (event.eventType === 'session.error') { terminal = event.payload.errorCode; release(); }
+  };
+  await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
+
+  context = new AudioContext();
+  await context.audioWorklet.addModule(URL.createObjectURL(new Blob([workletCode], { type: 'text/javascript' })));
+  stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  worklet = new AudioWorkletNode(context, 'capture');
+  captured = 0;
+  worklet.port.onmessage = (event) => {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    const samples = event.data;
+    socket.send(JSON.stringify({
+      eventType: 'audio.append',
+      epoch: 1,
+      payload: { audioBase64: encodeFrame(samples), sampleOffset: captured, capturedSamples: captured + samples.length },
+    }));
+    captured += samples.length;
+  };
+  context.createMediaStreamSource(stream).connect(worklet);
+  document.getElementById('start').disabled = true;
+  document.getElementById('stop').disabled = false;
+}
+
+/** Stops the capture, sends the confirmed tail and releases every resource. */
+function stop() {
+  document.getElementById('stop').disabled = true;
+  if (worklet) { worklet.disconnect(); worklet.port.onmessage = null; }
+  if (context) context.close();
+  if (stream) stream.getTracks().forEach((track) => track.stop());
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ eventType: 'session.finish', epoch: 1, payload: { capturedSamples: captured } }));
+    // The terminal event releases the socket; a slow server is bounded by a timeout.
+    setTimeout(() => { if (!terminal) { terminal = 'TIMEOUT'; release(); } }, 30000);
+  } else {
+    release();
+  }
+}
+
+function release() {
+  if (socket) { try { socket.close(); } catch (ignored) {} socket = null; }
+  document.getElementById('start').disabled = false;
+  log('terminal: ' + terminal);
+}
+
+document.getElementById('start').onclick = () => start().catch((error) => { log('error: ' + error.message); release(); });
+document.getElementById('stop').onclick = stop;
+</script>
+</body>
+</html>

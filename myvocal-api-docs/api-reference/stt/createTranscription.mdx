@@ -1,0 +1,92 @@
+---
+title: "Create a transcription"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/stt/transcriptions"
+description: "Submit an uploaded file or a public media URL, quote and reserve Characters, and start the task."
+---
+
+Submits one transcription from an `uploadId` or a public `mediaUrl`. The call quotes the work,
+reserves Characters and starts the asynchronous task in a single request.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+<ParamField header="Idempotency-Key" type="string" required>
+  Binds this request. The same key and the same body return the same task; the same key with a
+  different body is refused as `IDEMPOTENCY_CONFLICT`.
+</ParamField>
+
+### Body
+
+<ParamField body="uploadId" type="string">
+  An upload from `POST /uploads`. Use exactly one of `uploadId` or `mediaUrl`.
+</ParamField>
+
+<ParamField body="mediaUrl" type="string">
+  A public `http`/`https` URL. The server fetches it over a real connection and re-checks every
+  redirect; private, loopback, link-local and cloud-metadata addresses are refused. There is no domain
+  or port allowlist.
+</ParamField>
+
+<ParamField body="audioTrackIndex" type="number">
+  Which audio track to transcribe. Defaults to the default track.
+</ParamField>
+
+<ParamField body="languageHint" type="string">
+  The spoken language, or omit for automatic detection.
+</ParamField>
+
+<ParamField body="title" type="string">
+  A title for the History row.
+</ParamField>
+
+<ParamField body="modelId" type="string">
+  Optional model identifier; defaults to `myvocal_stt_v1`.
+</ParamField>
+
+<ParamField body="notifyUrl" type="string">
+  A public URL to receive a signed completion callback. Polling stays the authoritative result.
+</ParamField>
+
+<ParamField body="notificationSigningSecret" type="string">
+  A write-only secret used to sign the callback. It is stored encrypted and never returned.
+</ParamField>
+
+<ParamField body="options" type="object">
+  The full option surface: `separateSpeakers`, `maxSpeakerCount`, `alignmentLevel`, `entityCategories`,
+  `redactCategories`, `redactionStyle`, `rewriteInstruction`, `removeDisfluencies`,
+  `identifyConversationRoles`, `vocabularyHints`, `separateChannels`, `channelResultMode`,
+  `exportFormats`, `inputEncoding`, `processingContentStorage` and more. Option combinations that the
+  model does not support are refused at submit with `INPUT_INVALID` rather than silently dropped.
+  See [capabilities](/api-reference/stt/capabilities) for the live list.
+</ParamField>
+
+<ParamField body="waitMs" type="number">
+  Optionally wait up to this bounded time for a result inside the same request.
+</ParamField>
+
+### Response
+
+<ResponseField name="transcriptionId" type="string">
+  The MyVocal task id, also the History id.
+</ResponseField>
+
+<ResponseField name="requestId" type="string">
+  The correlation id for this request.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  `QUEUED`, `PROCESSING`, `COMPLETED`, `PARTIAL` or `FAILED`.
+</ResponseField>
+
+<ResponseField name="modelId" type="string">
+  `myvocal_stt_v1`.
+</ResponseField>
+
+<ResponseField name="billing" type="object">
+  `state`, `planKey`, `rateVersion`, `ratePerMinute`, `reservedCharacters`, `settledCharacters`,
+  `releasedCharacters`, `billableCharacters` and `billableDurationMs`. Characters and durations are
+  **JSON strings**; convert before comparing.
+</ResponseField>

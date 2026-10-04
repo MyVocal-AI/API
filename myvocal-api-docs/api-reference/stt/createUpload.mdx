@@ -1,0 +1,53 @@
+---
+title: "Create an upload"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/stt/uploads"
+description: "Reserve a presigned multi-part upload for a Batch transcription source."
+---
+
+Creates a multi-part upload. Send the parts to the returned presigned URLs, then complete the upload.
+The server probes the file and builds the canonical audio used for the transcription.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Body
+
+<ParamField body="fileName" type="string" required>
+  The original file name, used for the History title default.
+</ParamField>
+
+<ParamField body="fileSizeBytes" type="number" required>
+  The exact file size in bytes, within the technical upload ceiling.
+</ParamField>
+
+### Response
+
+<ResponseField name="uploadId" type="string">
+  The upload id to pass to create-transcription.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  `CREATED`, then `UPLOADING`, then `READY`.
+</ResponseField>
+
+<ResponseField name="partSizeBytes" type="number">
+  The required part size.
+</ResponseField>
+
+<ResponseField name="totalParts" type="number">
+  How many parts to send.
+</ResponseField>
+
+<ResponseField name="media" type="object">
+  After the file is probed: `mediaType`, `containerLabel`, `containerDurationMs` and the `audioTracks`
+  (each with `index`, `codec`, `channels`, `sampleRateHz`, `durationMs`, `language` and
+  `defaultTrack`).
+</ResponseField>
+
+<Note>
+Signed part URLs expire. Request new signatures if an upload takes long, and complete the upload
+before submitting the transcription.
+</Note>

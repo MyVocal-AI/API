@@ -1,0 +1,126 @@
+---
+title: "Create a real-time session"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/stt/realtime/sessions"
+description: "Start a streaming transcription session and get its socket URL."
+---
+
+Creates a real-time session. Audio is then streamed over the returned `streamUrl`. The session shares
+History and the Characters balance with Batch.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+<ParamField header="Idempotency-Key" type="string" required>
+  Binds this request. The same key and the same body (including `title` and `options`) return the same
+  session; a changed title or option under the same key is `IDEMPOTENCY_CONFLICT`.
+</ParamField>
+
+### Body
+
+<ParamField body="languageHint" type="string">
+  The spoken language, or omit for automatic detection.
+</ParamField>
+
+<ParamField body="title" type="string">
+  A title for the History row, up to 200 characters. Defaults to a generic recording title.
+</ParamField>
+
+<ParamField body="options.inputEncoding" type="string" default="pcm_s16le_16000">
+  The byte format you will send: `pcm_s16le_8000`, `pcm_s16le_16000`, `pcm_s16le_22050`,
+  `pcm_s16le_24000`, `pcm_s16le_44100`, `pcm_s16le_48000` or `mulaw_8000`. PCM is signed 16-bit
+  little-endian mono; μ-law is one byte per sample. The chosen rate drives the whole session timeline.
+</ParamField>
+
+<ParamField body="options.segmentCommitMode" type="string" default="manual">
+  `manual` (you commit segments) or `vad` (the model decides segment boundaries).
+</ParamField>
+
+<ParamField body="options.additionalLanguageHints" type="string[]">
+  Candidate language hints, up to 8. This is not the detected language.
+</ParamField>
+
+<ParamField body="options.speechDetectionThreshold" type="number">
+  Speech threshold for `vad`, between `0` and `1`.
+</ParamField>
+
+<ParamField body="options.commitSilenceMs" type="number">
+  Silence before a `vad` commit, in milliseconds.
+</ParamField>
+
+<ParamField body="options.minimumSpeechMs" type="number">
+  Minimum speech length, in milliseconds.
+</ParamField>
+
+<ParamField body="options.minimumSilenceMs" type="number">
+  Minimum silence length, in milliseconds.
+</ParamField>
+
+<ParamField body="options.includeAlignment" type="boolean">
+  Word and character alignment. Mutually exclusive with `options.suppressBackgroundSpeech`; when
+  background filtering is on and this is unset, alignment defaults to off.
+</ParamField>
+
+<ParamField body="options.includeDetectedLanguage" type="boolean">
+  Return the detected language.
+</ParamField>
+
+<ParamField body="options.vocabularyHints" type="string[]">
+  Key terms to bias recognition, up to 50 entries.
+</ParamField>
+
+<ParamField body="options.removeDisfluencies" type="boolean">
+  Remove filler words.
+</ParamField>
+
+<ParamField body="options.entityCategories" type="string[]">
+  Detect entities of these categories. Mutually exclusive with `options.rewriteInstruction`.
+</ParamField>
+
+<ParamField body="options.rewriteInstruction" type="string">
+  Instruction for an edited transcript, up to 2000 characters. Mutually exclusive with
+  `options.entityCategories`.
+</ParamField>
+
+<ParamField body="options.suppressBackgroundSpeech" type="boolean">
+  Filter background speech. Mutually exclusive with timestamps.
+</ParamField>
+
+<ParamField body="options.heartbeatIntervalMs" type="number">
+  Keepalive interval between `500` and `10000` milliseconds.
+</ParamField>
+
+<ParamField body="options.processingContentStorage" type="boolean">
+  Request processing-side content storage. Account eligibility is not verified; if the model returns
+  a warning that it was not applied, the session reports a
+  `PROCESSING_STORAGE_NOT_APPLIED` notice rather than a success guarantee.
+</ParamField>
+
+### Response
+
+<ResponseField name="sessionId" type="string">
+  The session id (`rts_...`).
+</ResponseField>
+
+<ResponseField name="transcriptionId" type="string">
+  The History id (`stt_...`), the same entity Batch results use.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  The session state: `RECORDING`, `PAUSED` or `CLOSED`, or the task status once closed.
+</ResponseField>
+
+<ResponseField name="modelId" type="string">
+  `myvocal_stt_realtime_v1`.
+</ResponseField>
+
+<ResponseField name="streamUrl" type="string">
+  The MyVocal socket path. Connect it as a WebSocket; identity comes from the `accessKey` header or a
+  ticket, never from the URL string alone.
+</ResponseField>
+
+<ResponseField name="effectiveOptions" type="object">
+  The options in effect, including the resolved `inputEncoding` and `sampleRateHz`.
+</ResponseField>

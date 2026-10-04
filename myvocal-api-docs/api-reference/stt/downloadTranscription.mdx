@@ -1,0 +1,37 @@
+---
+title: "Download a transcription"
+api: "GET https://api.myvocal.ai/sound_clone/api/v1/stt/transcriptions/{transcriptionId}/download"
+description: "Download the result as txt, json, srt, segmented_json, html, docx or pdf."
+---
+
+Returns the result as a file. The bytes contain only MyVocal fields and metadata; generated
+PDF/DOCX/HTML carry no provider template or brand, and the customer's text is never rewritten.
+
+### Path
+
+<ParamField path="transcriptionId" type="string" required>
+  The task to download.
+</ParamField>
+
+### Query
+
+<ParamField query="format" type="string" required>
+  `txt`, `json`, `srt`, `segmented_json`, `html`, `docx` or `pdf`. The live list is returned by
+  [capabilities](/api-reference/stt/capabilities) as `downloadFormats`.
+</ParamField>
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Response
+
+The file bytes with `Content-Disposition: attachment` and `Cache-Control: no-store`. `txt` is the
+plain transcript text; `json` is the bare transcription view (no `code`/`message`/`data` envelope);
+the other formats are the rendered exports. Reading or re-downloading is free.
+
+<Note>
+An unsupported format returns `EXPORT_FORMAT_UNAVAILABLE`. Ownership is re-checked on every request.
+</Note>

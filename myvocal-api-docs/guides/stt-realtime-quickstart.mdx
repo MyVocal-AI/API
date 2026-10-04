@@ -1,0 +1,72 @@
+---
+title: "Speech to Text — Real-time quickstart"
+description: "Stream microphone or line audio to MyVocal and receive partial and final transcripts."
+---
+
+The real-time API streams audio over a WebSocket and returns partial and final transcripts as they are
+produced. Like Batch, it uses the existing MyVocal API key, the same Characters balance and the same
+History.
+
+## 1. Create a session
+
+Create a session with an `Idempotency-Key` and the options you want. The response returns a
+`sessionId`, a MyVocal `transcriptionId` and a `streamUrl`.
+
+<Card title="POST /sound_clone/api/v1/stt/realtime/sessions" icon="plus" href="/api-reference/stt/createSession">
+  Set the input encoding, the commit mode and the requested capabilities.
+</Card>
+
+```bash
+SESSION=$(curl -s https://api.myvocal.ai/sound_clone/api/v1/stt/realtime/sessions \
+  -H "accessKey: $MYVOCAL_ACCESS_KEY" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: 3a91-rt-1" \
+  -d '{"languageHint":"en","options":{"inputEncoding":"pcm_s16le_16000"}}')
+```
+
+## 2. Send your audio with the right encoding
+
+`inputEncoding` must match the bytes you send. `pcm_s16le_16000` is signed 16-bit little-endian mono
+at 16 kHz; `mulaw_8000` is one μ-law byte per sample. Always declare the microphone's real sample
+rate, or a second of audio is interpreted as the wrong duration.
+
+## 3. Connect the socket
+
+A server client sends the `accessKey` header. A browser must not put its long-lived key in a URL: it
+exchanges the key once for a short-lived, single-use ticket and connects with `?ticket=`.
+
+<Card title="POST /sound_clone/api/v1/stt/realtime/sessions/{sessionId}/tickets" icon="ticket" href="/api-reference/stt/createTicket">
+  Issues a single-use browser ticket bound to the owner and the session.
+</Card>
+
+Send audio with a MyVocal event envelope and read the results:
+
+```json
+{ "eventType": "audio.append", "epoch": 1,
+  "payload": { "audioBase64": "...", "sampleOffset": 0, "capturedSamples": 16000 } }
+```
+
+The server answers with `session.ready`, `transcript.delta`, `transcript.final`, `transcript.revision`,
+`transcript.entities`, `usage.updated`, `session.notice`, `session.completed` and `session.error`,
+each with an `eventId`, `sessionId` and a monotonic `sequence`.
+
+## 4. Pause, resume or commit
+
+- `segment.commit` submits the audio so far and **keeps** the session recording.
+- `session.pause` / `session.resume` close and reopen a recording segment (a new epoch).
+- `session.finish` flushes the tail, settles once and completes the task.
+
+<Card title="POST /sound_clone/api/v1/stt/realtime/sessions/{sessionId}/finish" icon="flag-checkered" href="/api-reference/stt/finishSession">
+  The terminal call; a repeated finish returns the same task and never charges twice.
+</Card>
+
+## Complete examples
+
+<Card title="Node.js real-time example" icon="node" href="/examples/stt/stt_realtime_minimal_mjs">
+  Server socket with the accessKey header.
+</Card>
+
+<Card title="Browser real-time example" icon="chrome" href="/examples/stt/stt_realtime_browser">
+  Microphone capture with a single-use ticket.
+</Card>
+
+Read [Characters and quotes](/guides/characters-and-quotes) for the billing rule.

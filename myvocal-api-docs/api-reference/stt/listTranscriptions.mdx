@@ -1,0 +1,51 @@
+---
+title: "List transcriptions"
+api: "GET https://api.myvocal.ai/sound_clone/api/v1/stt/transcriptions"
+description: "List the shared History for this account."
+---
+
+Lists the same History the MyVocal workspace shows. Batch and real-time results appear together.
+
+### Query
+
+<ParamField query="page" type="number" default="1">
+  Page number, starting at `1`.
+</ParamField>
+
+<ParamField query="pageSize" type="number" default="20">
+  Items per page.
+</ParamField>
+
+<ParamField query="status" type="string">
+  Filter by `QUEUED`, `PROCESSING`, `COMPLETED`, `PARTIAL` or `FAILED`.
+</ParamField>
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Response
+
+<ResponseField name="page" type="number">
+  The current page.
+</ResponseField>
+
+<ResponseField name="pageSize" type="number">
+  The page size.
+</ResponseField>
+
+<ResponseField name="total" type="number">
+  Total matching items.
+</ResponseField>
+
+<ResponseField name="totalPage" type="number">
+  Total pages.
+</ResponseField>
+
+<ResponseField name="items" type="array">
+  Each entry has `transcriptionId`, `modelId`, `title`, `status`, `audioDurationMs`,
+  `detectedLanguage`, `characters` and timestamps. `modelId` distinguishes a real-time result
+  (`myvocal_stt_realtime_v1`) from a Batch one.
+</ResponseField>

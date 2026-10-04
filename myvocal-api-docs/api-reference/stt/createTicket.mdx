@@ -1,0 +1,51 @@
+---
+title: "Create a browser ticket"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/stt/realtime/sessions/{sessionId}/tickets"
+description: "Exchange the accessKey for a short-lived, single-use socket ticket."
+---
+
+Issues a short-lived ticket for one owned session so a browser can open the socket without exposing
+the long-lived key in a URL. The ticket is single-use and bound to the owner and the session; a
+reconnect requests a fresh one. A replayed or expired ticket is refused at the handshake.
+
+### Path
+
+<ParamField path="sessionId" type="string" required>
+  The session to stream to.
+</ParamField>
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication. This is the only place the key is used; it never appears in the socket
+  URL.
+</ParamField>
+
+### Response
+
+<ResponseField name="ticketId" type="string">
+  The public ticket id (`rtt_...`).
+</ResponseField>
+
+<ResponseField name="sessionId" type="string">
+  The bound session.
+</ResponseField>
+
+<ResponseField name="streamUrl" type="string">
+  The socket path to connect.
+</ResponseField>
+
+<ResponseField name="expiresInSeconds" type="number">
+  The ticket lifetime in seconds.
+</ResponseField>
+
+<ResponseField name="ticket" type="string">
+  The plaintext ticket. It is returned exactly once; only its hash is stored.
+</ResponseField>
+
+```js
+const ticket = await rest('POST', `/sessions/${sessionId}/tickets`);
+const url = new URL(apiBase + ticket.streamUrl);
+url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+const socket = new WebSocket(url + '?ticket=' + encodeURIComponent(ticket.ticket));
+```
