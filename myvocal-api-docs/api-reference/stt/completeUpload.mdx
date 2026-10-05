@@ -6,8 +6,12 @@ description: "Complete the uploaded parts and analyze the audio."
 
 <ParamField header="accessKey" type="string" required>MyVocal API key.</ParamField>
 <ParamField path="uploadId" type="string" required>The upload id.</ParamField>
-<ParamField body="parts" type="array" required>
-All uploaded parts as objects with numeric `partNumber` and string `etag`.
+<ParamField body="parts" type="object[]" required>
+All uploaded parts with their object-storage ETags.
+<Expandable title="properties">
+  <ParamField body="partNumber" type="number" required>One-based part number.</ParamField>
+  <ParamField body="etag" type="string" required>ETag returned by the storage PUT.</ParamField>
+</Expandable>
 </ParamField>
 
 ```json

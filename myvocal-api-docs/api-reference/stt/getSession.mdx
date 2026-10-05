@@ -21,42 +21,51 @@ received/captured cursors and whether the socket is `accepting` audio.
 
 ### Response
 
-<ResponseField name="sessionId" type="string">
-  The session id.
-</ResponseField>
+Successful REST calls return `{ code: 1, message, data }`. The fields below are inside `data`;
+JSON downloads are the documented exception and return the transcript view directly.
 
-<ResponseField name="transcriptionId" type="string">
-  The History id.
-</ResponseField>
+<ResponseField name="code" type="number">`1` for success.</ResponseField>
+<ResponseField name="message" type="string">Result message.</ResponseField>
+<ResponseField name="data" type="object">
+  <Expandable title="properties" defaultOpen>
+    <ResponseField name="sessionId" type="string">
+      The session id.
+    </ResponseField>
 
-<ResponseField name="status" type="string">
-  The session state while open, or the task status once closed (`COMPLETED`, `PARTIAL`, `FAILED`).
-</ResponseField>
+    <ResponseField name="transcriptionId" type="string">
+      The History id.
+    </ResponseField>
 
-<ResponseField name="epoch" type="number">
-  The current recording segment. A `usage.updated` with `rotate: true` means start a new segment with
-  `session.resume`; the client then sends from the new epoch.
-</ResponseField>
+    <ResponseField name="status" type="string">
+      The session state while open, or the task status once closed (`COMPLETED`, `PARTIAL`, `FAILED`).
+    </ResponseField>
 
-<ResponseField name="accepting" type="boolean">
-  Whether the server is accepting audio for this session right now.
-</ResponseField>
+    <ResponseField name="epoch" type="number">
+      The current recording segment. A `usage.updated` with `rotate: true` means start a new segment with
+      `session.resume`; the client then sends from the new epoch.
+    </ResponseField>
 
-<ResponseField name="partial" type="string">
-  The current temporary text for the open segment.
-</ResponseField>
+    <ResponseField name="accepting" type="boolean">
+      Whether the server is accepting audio for this session right now.
+    </ResponseField>
 
-<ResponseField name="lines" type="array">
-  The committed lines: `id`, `text`, `revisedText`, `languageCode`, `languageProbability` and
-  `entities`, `words` and `characterAlignments`.
-</ResponseField>
+    <ResponseField name="partial" type="string">
+      The current temporary text for the open segment.
+    </ResponseField>
 
-<ResponseField name="notices" type="array">
-  Processing notices, for example `PROCESSING_STORAGE_NOT_APPLIED`. The absence of a notice does
-  not guarantee that a storage preference was applied.
-</ResponseField>
+    <ResponseField name="lines" type="array">
+      The committed lines: `id`, `text`, `revisedText`, `languageCode`, `languageProbability` and
+      `entities`, `words` and `characterAlignments`.
+    </ResponseField>
 
-<ResponseField name="usage" type="object">
-  `estimatedCharacters`, `billableCharacters`, `elapsedMs`, `sentSamples`, `receivedSamples` and
-  `capturedSamples`, all **decimal strings**; `accepting` is a boolean.
+    <ResponseField name="notices" type="array">
+      Processing notices, for example `PROCESSING_STORAGE_NOT_APPLIED`. The absence of a notice does
+      not guarantee that a storage preference was applied.
+    </ResponseField>
+
+    <ResponseField name="usage" type="object">
+      `estimatedCharacters`, `billableCharacters`, `elapsedMs`, `sentSamples`, `receivedSamples` and
+      `capturedSamples`, all **decimal strings**; `accepting` is a boolean.
+    </ResponseField>
+  </Expandable>
 </ResponseField>

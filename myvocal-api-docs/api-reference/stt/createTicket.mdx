@@ -23,24 +23,33 @@ reconnect requests a fresh one. A replayed or expired ticket is refused at the h
 
 ### Response
 
-<ResponseField name="ticketId" type="string">
-  The public ticket id (`rtt_...`).
-</ResponseField>
+Successful REST calls return `{ code: 1, message, data }`. The fields below are inside `data`;
+JSON downloads are the documented exception and return the transcript view directly.
 
-<ResponseField name="sessionId" type="string">
-  The bound session.
-</ResponseField>
+<ResponseField name="code" type="number">`1` for success.</ResponseField>
+<ResponseField name="message" type="string">Result message.</ResponseField>
+<ResponseField name="data" type="object">
+  <Expandable title="properties" defaultOpen>
+    <ResponseField name="ticketId" type="string">
+      The public ticket id (`rtt_...`).
+    </ResponseField>
 
-<ResponseField name="streamUrl" type="string">
-  The socket path to connect.
-</ResponseField>
+    <ResponseField name="sessionId" type="string">
+      The bound session.
+    </ResponseField>
 
-<ResponseField name="expiresInSeconds" type="number">
-  The ticket lifetime in seconds.
-</ResponseField>
+    <ResponseField name="streamUrl" type="string">
+      The socket path to connect.
+    </ResponseField>
 
-<ResponseField name="ticket" type="string">
-  The plaintext ticket. It is returned exactly once; only its hash is stored.
+    <ResponseField name="expiresInSeconds" type="number">
+      The ticket lifetime in seconds.
+    </ResponseField>
+
+    <ResponseField name="ticket" type="string">
+      The plaintext ticket. It is returned exactly once; only its hash is stored.
+    </ResponseField>
+  </Expandable>
 </ResponseField>
 
 ```js

@@ -129,24 +129,33 @@ audio. See [known limitations](/guides/stt-availability#known-parameter-error-is
 
 ### Response
 
-<ResponseField name="transcriptionId" type="string">
-  The MyVocal task id, also the History id.
-</ResponseField>
+Successful REST calls return `{ code: 1, message, data }`. The fields below are inside `data`;
+JSON downloads are the documented exception and return the transcript view directly.
 
-<ResponseField name="requestId" type="string">
-  The correlation id for this request.
-</ResponseField>
+<ResponseField name="code" type="number">`1` for success.</ResponseField>
+<ResponseField name="message" type="string">Result message.</ResponseField>
+<ResponseField name="data" type="object">
+  <Expandable title="properties" defaultOpen>
+    <ResponseField name="transcriptionId" type="string">
+      The MyVocal task id, also the History id.
+    </ResponseField>
 
-<ResponseField name="status" type="string">
-  `QUEUED`, `PROCESSING`, `RECONCILING`, `COMPLETED`, `PARTIAL` or `FAILED`.
-</ResponseField>
+    <ResponseField name="requestId" type="string">
+      The correlation id for this request.
+    </ResponseField>
 
-<ResponseField name="modelId" type="string">
-  `myvocal_stt_v1`.
-</ResponseField>
+    <ResponseField name="status" type="string">
+      `QUEUED`, `PROCESSING`, `RECONCILING`, `COMPLETED`, `PARTIAL` or `FAILED`.
+    </ResponseField>
 
-<ResponseField name="billing" type="object">
-  `state`, `planKey`, `rateVersion`, `ratePerMinute`, `reservedCharacters`, `settledCharacters`,
-  `releasedCharacters`, `billableCharacters` and `billableDurationMs`. Characters and durations are
-  **JSON strings**; convert before comparing.
+    <ResponseField name="modelId" type="string">
+      `myvocal_stt_v1`.
+    </ResponseField>
+
+    <ResponseField name="billing" type="object">
+      `state`, `planKey`, `rateVersion`, `ratePerMinute`, `reservedCharacters`, `settledCharacters`,
+      `releasedCharacters`, `billableCharacters` and `billableDurationMs`. Characters and durations are
+      **JSON strings**; convert before comparing.
+    </ResponseField>
+  </Expandable>
 </ResponseField>
