@@ -99,10 +99,10 @@ Server to client, each as `{ "eventId", "sessionId", "sequence", "eventType", "p
 | `transcript.delta` | `text` (temporary; replaces the previous delta) |
 | `transcript.final` | `id`, `text`, `revisedText`, `languageCode`, `languageProbability`, `entities`, `words`, `characterAlignments` |
 | `transcript.revision` | `id`, `text`, `revisedText` (the edited transcript arrived for that line) |
-| `transcript.entities` | `id`, `entities` (detected entities for that line) |
+| `transcript.entities` | `id`, `entities` (detected entities for that line; an empty list when its entities result arrived with none) |
 | `transcript.alignment` | `id`, `languageCode`, `languageProbability`, `words`, `characterAlignments` (late language/alignment) |
 | `usage.updated` | `estimatedCharacters`, `billableCharacters`, `elapsedMs`, `sentSamples`, `receivedSamples`, `capturedSamples` (all decimal strings), `accepting`, `epoch`, and `rotate`/`errorCode` when present |
-| `session.notice` | `code`, `message`; for example `PROCESSING_STORAGE_NOT_APPLIED`, or `SUPPLEMENT_NOT_RECEIVED` with `supplements` (`alignment`, `entities`, `revision`) and `lineIds` |
+| `session.notice` | `code`, `message`; for example `PROCESSING_STORAGE_NOT_APPLIED`, or `SUPPLEMENT_NOT_RECEIVED` with `supplements` (`alignment`, `entities`, `revision`, `language`) and `lineIds` |
 | `session.completed` | the terminal session view |
 | `session.error` | `errorCode` (a MyVocal code) |
 
@@ -117,7 +117,9 @@ detection. A frame that is not valid JSON, an unknown `eventType`, invalid base6
 - A `usage.updated` with `rotate: true` and `accepting: false` means the server wants a new segment:
   call `session.pause`, then `session.resume` (a new `epoch`), and continue sending from the new
   epoch. The frame that received `rotate: true` was **not** stored: re-send every frame after the
-  last acknowledged `sentSamples`, starting again at `sampleOffset` 0 in the new epoch.
+  last acknowledged `sentSamples`, starting again at `sampleOffset` 0 in the new epoch. This applies
+  to the last frame too: before `session.finish`, wait until `sentSamples` covers every captured
+  sample and no rotation is pending.
   `session.ready` reports the live epoch and cursors so a reconnect knows where to resume.
 - A server `session.error` carries a MyVocal code (`INPUT_INVALID`, `PROVIDER_UNAVAILABLE`,
   `INSUFFICIENT_CHARACTERS`, `TEMPORARILY_UNAVAILABLE`, …). A plain disconnect is not a successful

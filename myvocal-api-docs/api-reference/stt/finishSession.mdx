@@ -9,13 +9,16 @@ final result, settles the charge once and completes the task. A repeated finish 
 and never charges twice.
 
 The response arrives when the result is closed; you do not have to guess a waiting time. After the
-last final line, finish also waits for the supplements you requested (alignment unless
-`includeAlignment` is `false`, `entityCategories`, `rewriteInstruction`) and returns as soon as
-none is outstanding, at most about **8 seconds**, and never past the session's recovery window.
+last final line, finish also waits, line by line, for the supplements you requested (alignment
+unless `includeAlignment` is `false`, `entityCategories`, `rewriteInstruction`, and the detected
+language when `includeDetectedLanguage` is `true`) and returns as soon as none is outstanding, at
+most about **8 seconds**, and never past the session's recovery window.
 A requested supplement that has not arrived by then is reported, not waited for indefinitely: the
-session gets a `SUPPLEMENT_NOT_RECEIVED` notice listing `supplements` and the affected `lineIds`,
-and an edit that never arrived makes the task's `revisionStatus` `FAILED` with
-`REVISION_NOT_RECEIVED`. The audio outcome and the charge do not depend on supplements.
+session gets a `SUPPLEMENT_NOT_RECEIVED` notice listing `supplements` and the affected `lineIds`
+(lines missing the same kinds share a notice), and an edit that never arrived makes the task's
+`revisionStatus` `FAILED` with `revisionErrorCode` `REVISION_NOT_RECEIVED`. An entities result with
+no entities counts as arrived; on the socket it is a `transcript.entities` event with an empty list.
+The audio outcome and the charge do not depend on supplements.
 
 ### Path
 

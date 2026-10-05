@@ -60,8 +60,8 @@ JSON downloads are the documented exception and return the transcript view direc
 
     <ResponseField name="notices" type="array">
       Processing notices, each with `code` and `message`, for example `PROCESSING_STORAGE_NOT_APPLIED`
-      or `SUPPLEMENT_NOT_RECEIVED` (adds `supplements`, such as `alignment`, `entities` or `revision`,
-      and the affected `lineIds`). The absence of a notice does
+      or `SUPPLEMENT_NOT_RECEIVED` (adds `supplements`, such as `alignment`, `entities`, `revision` or
+      `language`, and the affected `lineIds`; every listed line lacks every listed kind). The absence of a notice does
       not guarantee that a storage preference was applied.
     </ResponseField>
 

@@ -64,8 +64,8 @@ retention effect have not been verified. Acceptance of the request, or absence o
 
 ## Client validation coverage
 
-Production real-time calls have been verified for PCM at 8, 16 and 48 kHz and μ-law at 8 kHz.
-PCM at 22.05, 24 and 44.1 kHz is implemented and locally tested, but has not yet been verified
-in production. The browser example (a same-origin backend plus page) has been run in an isolated
+Production real-time calls have been verified for all seven input encodings: PCM at 8, 16, 22.05,
+24, 44.1 and 48 kHz and μ-law at 8 kHz, streamed from prepared audio files rather than from a real
+capture device. The browser example (a same-origin backend plus page) has been run in an isolated
 browser with a simulated microphone; real-microphone/device acceptance remains unverified. Always
 declare the actual sample rate and test your capture device.
