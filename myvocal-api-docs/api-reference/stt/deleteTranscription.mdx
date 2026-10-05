@@ -21,8 +21,17 @@ the MyVocal workspace uses.
 
 ### Response
 
-<ResponseField name="transcriptionId" type="string">
-  The deleted task id.
+Successful REST calls return `{ code: 1, message, data }`. The fields below are inside `data`;
+JSON downloads are the documented exception and return the transcript view directly.
+
+<ResponseField name="code" type="number">`1` for success.</ResponseField>
+<ResponseField name="message" type="string">Result message.</ResponseField>
+<ResponseField name="data" type="object">
+  <Expandable title="properties" defaultOpen>
+    <ResponseField name="transcriptionId" type="string">
+      The deleted task id.
+    </ResponseField>
+  </Expandable>
 </ResponseField>
 
 Stored media, the transcript and the exports are purged; accounting rows are kept without transcript

@@ -15,36 +15,45 @@ endpoints accept, in MyVocal field names.
 
 ### Response
 
-<ResponseField name="modelId" type="string">
-  The default (Batch) model: `myvocal_stt_v1`. Real-time results report
-  `myvocal_stt_realtime_v1`.
-</ResponseField>
+Successful REST calls return `{ code: 1, message, data }`. The fields below are inside `data`;
+JSON downloads are the documented exception and return the transcript view directly.
 
-<ResponseField name="modes" type="object">
-  `{ "batch": "AVAILABLE", "realtime": "AVAILABLE" }`.
-</ResponseField>
+<ResponseField name="code" type="number">`1` for success.</ResponseField>
+<ResponseField name="message" type="string">Result message.</ResponseField>
+<ResponseField name="data" type="object">
+  <Expandable title="properties" defaultOpen>
+    <ResponseField name="modelId" type="string">
+      The default (Batch) model: `myvocal_stt_v1`. Real-time results report
+      `myvocal_stt_realtime_v1`.
+    </ResponseField>
 
-<ResponseField name="models" type="array">
-  Each entry is `{ modelId, mode, state }`. A `state` of `AVAILABLE` means the model is ready to use.
-</ResponseField>
+    <ResponseField name="modes" type="object">
+      `{ "batch": "AVAILABLE", "realtime": "AVAILABLE" }`.
+    </ResponseField>
 
-<ResponseField name="requestParameters" type="object">
-  The accepted Batch option fields and their constraints. `options.processingContentStorage` notes
-  that account eligibility is not verified.
-</ResponseField>
+    <ResponseField name="models" type="array">
+      Each entry is `{ modelId, mode, state }`. A `state` of `AVAILABLE` means the model is ready to use.
+    </ResponseField>
 
-<ResponseField name="realtimeParameters" type="object">
-  The accepted real-time session options, for example `options.inputEncoding` and
-  `options.segmentCommitMode`, plus the `Idempotency-Key` header requirement.
-</ResponseField>
+    <ResponseField name="requestParameters" type="object">
+      The accepted Batch option fields and their constraints. `options.processingContentStorage` notes
+      that account eligibility is not verified.
+    </ResponseField>
 
-<ResponseField name="downloadFormats" type="array">
-  Every format the download endpoint accepts: `txt`, `json`, `srt`, `segmented_json`, `html`, `docx`,
-  `pdf`.
-</ResponseField>
+    <ResponseField name="realtimeParameters" type="object">
+      The accepted real-time session options, for example `options.inputEncoding` and
+      `options.segmentCommitMode`, plus the `Idempotency-Key` header requirement.
+    </ResponseField>
 
-<ResponseField name="account" type="object">
-  The plan, rate and balances for this key's account.
+    <ResponseField name="downloadFormats" type="array">
+      Every format the download endpoint accepts: `txt`, `json`, `srt`, `segmented_json`, `html`, `docx`,
+      `pdf`.
+    </ResponseField>
+
+    <ResponseField name="account" type="object">
+      The plan, rate and balances for this key's account.
+    </ResponseField>
+  </Expandable>
 </ResponseField>
 
 ```json

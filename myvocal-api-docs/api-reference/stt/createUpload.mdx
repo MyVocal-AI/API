@@ -29,27 +29,36 @@ The server probes the file and builds the canonical audio used for the transcrip
 
 ### Response
 
-<ResponseField name="uploadId" type="string">
-  The upload id to pass to create-transcription.
-</ResponseField>
+Successful REST calls return `{ code: 1, message, data }`. The fields below are inside `data`;
+JSON downloads are the documented exception and return the transcript view directly.
 
-<ResponseField name="state" type="string">
-  `UPLOADING` initially; complete the upload and read its state before submitting. Analysis can
-  result in `READY` or `FAILED`.
-</ResponseField>
+<ResponseField name="code" type="number">`1` for success.</ResponseField>
+<ResponseField name="message" type="string">Result message.</ResponseField>
+<ResponseField name="data" type="object">
+  <Expandable title="properties" defaultOpen>
+    <ResponseField name="uploadId" type="string">
+      The upload id to pass to create-transcription.
+    </ResponseField>
 
-<ResponseField name="partSizeBytes" type="number">
-  The required part size.
-</ResponseField>
+    <ResponseField name="state" type="string">
+      `UPLOADING` initially; complete the upload and read its state before submitting. Analysis can
+      result in `READY` or `FAILED`.
+    </ResponseField>
 
-<ResponseField name="totalParts" type="number">
-  How many parts to send.
-</ResponseField>
+    <ResponseField name="partSizeBytes" type="number">
+      The required part size.
+    </ResponseField>
 
-<ResponseField name="media" type="object">
-  After the file is probed: `mediaType`, `containerLabel`, `containerDurationMs` and the `audioTracks`
-  (each with `index`, `codec`, `channels`, `sampleRateHz`, `durationMs`, `language` and
-  `defaultTrack`).
+    <ResponseField name="totalParts" type="number">
+      How many parts to send.
+    </ResponseField>
+
+    <ResponseField name="media" type="object">
+      After the file is probed: `mediaType`, `containerLabel`, `containerDurationMs` and the `audioTracks`
+      (each with `index`, `codec`, `channels`, `sampleRateHz`, `durationMs`, `language` and
+      `defaultTrack`).
+    </ResponseField>
+  </Expandable>
 </ResponseField>
 
 <Note>

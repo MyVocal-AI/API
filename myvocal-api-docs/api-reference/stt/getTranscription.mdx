@@ -21,46 +21,55 @@ Returns one transcription from the shared History. Poll this until `status` is `
 
 ### Response
 
-<ResponseField name="transcriptionId" type="string">
-  The MyVocal task id.
-</ResponseField>
+Successful REST calls return `{ code: 1, message, data }`. The fields below are inside `data`;
+JSON downloads are the documented exception and return the transcript view directly.
 
-<ResponseField name="status" type="string">
-  `QUEUED`, `PROCESSING`, `RECONCILING`, `COMPLETED`, `PARTIAL` or `FAILED`. A real-time task reports `COMPLETED`
-  when it settled normally.
-</ResponseField>
+<ResponseField name="code" type="number">`1` for success.</ResponseField>
+<ResponseField name="message" type="string">Result message.</ResponseField>
+<ResponseField name="data" type="object">
+  <Expandable title="properties" defaultOpen>
+    <ResponseField name="transcriptionId" type="string">
+      The MyVocal task id.
+    </ResponseField>
 
-<ResponseField name="modelId" type="string">
-  `myvocal_stt_v1` for Batch, `myvocal_stt_realtime_v1` for a real-time result.
-</ResponseField>
+    <ResponseField name="status" type="string">
+      `QUEUED`, `PROCESSING`, `RECONCILING`, `COMPLETED`, `PARTIAL` or `FAILED`. A real-time task reports `COMPLETED`
+      when it settled normally.
+    </ResponseField>
 
-<ResponseField name="languageHint" type="string">
-  The requested language, or `auto`.
-</ResponseField>
+    <ResponseField name="modelId" type="string">
+      `myvocal_stt_v1` for Batch, `myvocal_stt_realtime_v1` for a real-time result.
+    </ResponseField>
 
-<ResponseField name="detectedLanguage" type="string">
-  The detected language, when the model returned one.
-</ResponseField>
+    <ResponseField name="languageHint" type="string">
+      The requested language, or `auto`.
+    </ResponseField>
 
-<ResponseField name="audioDurationMs" type="string">
-  The analysed audio duration, as a decimal string.
-</ResponseField>
+    <ResponseField name="detectedLanguage" type="string">
+      The detected language, when the model returned one.
+    </ResponseField>
 
-<ResponseField name="transcript" type="object">
-  `null` before a result exists; a completed silent recording can have an empty transcript.
-  `text`, `languageCode`, `languageConfidence`, `speakers`, `segments` and `channelResults`. Each
-  segment carries `id`, `speakerId`, `channelIndex`, `startMs`, `endMs`, `text`, `timingStatus`,
-  `tokens` and `characterAlignments`. Entities, the edited text and the per-channel results are
-  MyVocal fields; a provider value is never exposed raw.
-</ResponseField>
+    <ResponseField name="audioDurationMs" type="string">
+      The analysed audio duration, as a decimal string.
+    </ResponseField>
 
-See [known limitations](/guides/stt-availability) for current parameter-error classification and
-optional-feature behavior. Stop polling terminal tasks; read `billing` to determine actual charges.
+    <ResponseField name="transcript" type="object">
+      `null` before a result exists; a completed silent recording can have an empty transcript.
+      `text`, `languageCode`, `languageConfidence`, `speakers`, `segments` and `channelResults`. Each
+      segment carries `id`, `speakerId`, `channelIndex`, `startMs`, `endMs`, `text`, `timingStatus`,
+      `tokens` and `characterAlignments`. Entities, the edited text and the per-channel results are
+      MyVocal fields; a provider value is never exposed raw.
+    </ResponseField>
 
-<ResponseField name="billing" type="object">
-  The same billing summary as create. `billableCharacters` is what this task actually charges.
-</ResponseField>
+    See [known limitations](/guides/stt-availability) for current parameter-error classification and
+    optional-feature behavior. Stop polling terminal tasks; read `billing` to determine actual charges.
 
-<ResponseField name="error" type="object">
-  Present only for `FAILED`: `errorCode`, `message`, `retryable`, `action` and `requestId`.
+    <ResponseField name="billing" type="object">
+      The same billing summary as create. `billableCharacters` is what this task actually charges.
+    </ResponseField>
+
+    <ResponseField name="error" type="object">
+      Present only for `FAILED`: `errorCode`, `message`, `retryable`, `action` and `requestId`.
+    </ResponseField>
+  </Expandable>
 </ResponseField>

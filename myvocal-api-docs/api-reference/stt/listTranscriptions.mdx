@@ -24,24 +24,33 @@ Lists the same History the MyVocal workspace shows. Batch and real-time results 
 
 ### Response
 
-<ResponseField name="page" type="number">
-  The current page.
-</ResponseField>
+Successful REST calls return `{ code: 1, message, data }`. The fields below are inside `data`;
+JSON downloads are the documented exception and return the transcript view directly.
 
-<ResponseField name="pageSize" type="number">
-  The page size.
-</ResponseField>
+<ResponseField name="code" type="number">`1` for success.</ResponseField>
+<ResponseField name="message" type="string">Result message.</ResponseField>
+<ResponseField name="data" type="object">
+  <Expandable title="properties" defaultOpen>
+    <ResponseField name="page" type="number">
+      The current page.
+    </ResponseField>
 
-<ResponseField name="total" type="number">
-  Total matching items.
-</ResponseField>
+    <ResponseField name="pageSize" type="number">
+      The page size.
+    </ResponseField>
 
-<ResponseField name="totalPage" type="number">
-  Total pages.
-</ResponseField>
+    <ResponseField name="total" type="number">
+      Total matching items.
+    </ResponseField>
 
-<ResponseField name="items" type="array">
-  Each entry has `transcriptionId`, `modelId`, `title`, `status`, `audioDurationMs`,
-  `detectedLanguage`, `characters` and timestamps. `modelId` distinguishes a real-time result
-  (`myvocal_stt_realtime_v1`) from a Batch one.
+    <ResponseField name="totalPage" type="number">
+      Total pages.
+    </ResponseField>
+
+    <ResponseField name="items" type="array">
+      Each entry has `transcriptionId`, `modelId`, `title`, `status`, `audioDurationMs`,
+      `detectedLanguage`, `characters` and timestamps. `modelId` distinguishes a real-time result
+      (`myvocal_stt_realtime_v1`) from a Batch one.
+    </ResponseField>
+  </Expandable>
 </ResponseField>
