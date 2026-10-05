@@ -1,0 +1,30 @@
+---
+title: "Delete a transcription"
+api: "DELETE https://api.myvocal.ai/sound_clone/api/v1/stt/transcriptions/{transcriptionId}"
+description: "Delete a task and its content."
+---
+
+Deletes a transcription. The delete takes effect immediately for every read, and is the same delete
+the MyVocal workspace uses.
+
+### Path
+
+<ParamField path="transcriptionId" type="string" required>
+  The task to delete.
+</ParamField>
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Response
+
+<ResponseField name="transcriptionId" type="string">
+  The deleted task id.
+</ResponseField>
+
+Stored media, the transcript and the exports are purged; accounting rows are kept without transcript
+text. A result that arrives after the delete is recorded as platform loss and never revives the task
+or charges the account.

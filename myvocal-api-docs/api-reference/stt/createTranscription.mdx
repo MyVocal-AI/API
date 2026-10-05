@@ -1,0 +1,152 @@
+---
+title: "Create a transcription"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/stt/transcriptions"
+description: "Submit an uploaded file or a public media URL, quote and reserve Characters, and start the task."
+---
+
+Submits one transcription from an `uploadId` or a public `mediaUrl`. The call quotes the work,
+reserves Characters and starts the asynchronous task in a single request.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+<ParamField header="Idempotency-Key" type="string" required>
+  Binds this request. The same key and the same body return the same task; the same key with a
+  different body is refused as `IDEMPOTENCY_CONFLICT`.
+</ParamField>
+
+### Body
+
+<ParamField body="uploadId" type="string">
+  An upload from `POST /uploads`. Use exactly one of `uploadId` or `mediaUrl`.
+</ParamField>
+
+<ParamField body="mediaUrl" type="string">
+  A public `http`/`https` URL. The server fetches it over a real connection and re-checks every
+  redirect; private, loopback, link-local and cloud-metadata addresses are refused. There is no domain
+  or port allowlist.
+</ParamField>
+
+<ParamField body="audioTrackIndex" type="number">
+  Which audio track to transcribe. Required when the source contains more than one audio track;
+  use the `index` from the upload's `media.audioTracks`.
+</ParamField>
+
+<ParamField body="languageHint" type="string">
+  The spoken language, or omit for automatic detection.
+</ParamField>
+
+<ParamField body="title" type="string">
+  A title for the History row.
+</ParamField>
+
+<ParamField body="modelId" type="string">
+  Optional model identifier; defaults to `myvocal_stt_v1`.
+</ParamField>
+
+<ParamField body="options" type="object">
+  Processing options: `separateSpeakers`, `maxSpeakerCount`, `alignmentLevel`, `entityCategories`,
+  `redactCategories`, `redactionStyle`, `rewriteInstruction`, `removeDisfluencies`,
+  `identifyConversationRoles`, `vocabularyHints`, `separateChannels`, `channelResultMode`,
+  `exportFormats`, `inputEncoding`, `processingContentStorage` and more. Option combinations that the
+  model does not support are refused at submit with `INPUT_INVALID` rather than silently dropped.
+  Completion notifications are options too: `options.notifyOnCompletion` (`true` to enable),
+  `options.notifyUrl` (a public URL MyVocal posts the signed event to), `options.clientMetadata`
+  (opaque caller data echoed back) and `options.notificationSigningSecret` (the write-only HMAC
+  key). Polling stays the authoritative result.
+  See [capabilities](/api-reference/stt/capabilities) for the live list.
+</ParamField>
+
+<ParamField body="waitForCompletion" type="boolean">
+  When `true`, this call waits for a terminal state inside the same request.
+</ParamField>
+
+<ParamField body="waitTimeoutMs" type="number">
+  The wait budget in milliseconds. If the task is still running at the budget, the request
+  returns the task with its identity; it is not cancelled.
+</ParamField>
+
+## Batch options
+
+All fields below belong inside `options`. Omit fields you do not need.
+
+| Field | Type and accepted values |
+|---|---|
+| `rewriteInstruction` | String, at most 2000 characters |
+| `includeSoundEvents` | Boolean |
+| `separateSpeakers` | Boolean; default `true` for single-channel processing |
+| `maxSpeakerCount` | Integer, 1–32 |
+| `speakerMergeSensitivity` | Number, 0.1–0.4; requires speaker separation and no `maxSpeakerCount` |
+| `alignmentLevel` | `none`, `word` (default), `character` |
+| `inputEncoding` | `other` (default, prepared container audio), `pcm_s16le_16` (converted 16 kHz mono PCM) |
+| `samplingTemperature` | Number, 0–2 |
+| `randomSeed` | Non-negative integer |
+| `separateChannels` | Boolean; preserve and transcribe channels separately |
+| `channelResultMode` | `separate` or `combined` |
+| `entityCategories` | Array, at most 32 strings; tested examples include `pii`, `phi`, `pci`, `all`, `name` |
+| `redactCategories` | Array, at most 32 strings; subset of `entityCategories` |
+| `redactionStyle` | `redact`, `replace`, `mask`; requires `redactCategories` |
+| `removeDisfluencies` | Boolean |
+| `identifyConversationRoles` | Boolean; requires speaker separation |
+| `vocabularyHints` | Array, at most 1000 strings, each at most 128 characters |
+| `processingContentStorage` | Boolean; see [storage limitations](/guides/stt-availability#speaker-matching-and-storage-requests) |
+| `exportFormats` | Array of supported [download formats](/api-reference/stt/downloadTranscription) |
+| `exportOptions` | Array of per-format objects, described below |
+| `notifyOnCompletion` | Boolean; enables completed-task notification |
+| `notifyUrl` | Public HTTP(S) URL |
+| `clientMetadata` | Object, at most two levels and 16 KB |
+| `notificationSigningSecret` | Write-only signing secret; see [notifications](/guides/stt-batch-quickstart#completion-notifications) |
+
+### Option combinations
+
+- `rewriteInstruction` cannot be combined with entity detection, redaction or `separateChannels`.
+- Multi-channel processing does not separate speakers. Do not combine `separateChannels` with
+  `maxSpeakerCount`, `speakerMergeSensitivity`, `identifyConversationRoles` or `pcm_s16le_16` input.
+  The selected audio track can have at most five channels for transcription.
+- Multi-channel `combined` results require alignment and cannot be combined with entity detection
+  or redaction.
+- `matchKnownSpeakers` is unavailable. Do not request it.
+
+Each `exportOptions` entry has a required `format` and optional controls:
+
+| Field | Type / limit |
+|---|---|
+| `includeSpeakers`, `includeTimestamps` | Boolean |
+| `segmentOnSilenceLongerThanS`, `maxSegmentDurationS` | Number greater than 0 and at most 3600 seconds |
+| `maxSegmentChars` | Integer, 1–100000 |
+| `maxCharactersPerLine` | Integer, 1–16384 |
+
+Only relevant formats use each control; `json` is the public transcription view. Without alignment,
+SRT cannot produce timed cues. These options do not change recognition or billing.
+
+<Warning>
+Some invalid entity categories currently fail asynchronously as `MEDIA_UNREADABLE` even for valid
+audio. See [known limitations](/guides/stt-availability#known-parameter-error-issue) before retrying.
+</Warning>
+
+### Response
+
+<ResponseField name="transcriptionId" type="string">
+  The MyVocal task id, also the History id.
+</ResponseField>
+
+<ResponseField name="requestId" type="string">
+  The correlation id for this request.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  `QUEUED`, `PROCESSING`, `RECONCILING`, `COMPLETED`, `PARTIAL` or `FAILED`.
+</ResponseField>
+
+<ResponseField name="modelId" type="string">
+  `myvocal_stt_v1`.
+</ResponseField>
+
+<ResponseField name="billing" type="object">
+  `state`, `planKey`, `rateVersion`, `ratePerMinute`, `reservedCharacters`, `settledCharacters`,
+  `releasedCharacters`, `billableCharacters` and `billableDurationMs`. Characters and durations are
+  **JSON strings**; convert before comparing.
+</ResponseField>

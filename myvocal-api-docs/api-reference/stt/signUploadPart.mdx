@@ -1,0 +1,16 @@
+---
+title: "Sign an upload part"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/stt/uploads/{uploadId}/parts/{partNumber}"
+description: "Get the temporary URL for uploading one part."
+---
+
+<ParamField header="accessKey" type="string" required>MyVocal API key.</ParamField>
+<ParamField path="uploadId" type="string" required>The upload id.</ParamField>
+<ParamField path="partNumber" type="integer" required>One-based part number, up to `totalParts`.</ParamField>
+
+The response's `data` contains `partNumber`, `url` and `expiresInSeconds`.
+PUT the exact part bytes to `url`, **without** an `accessKey` header, and retain the returned
+`ETag`. Send `partSizeBytes` bytes per part except for the last part.
+
+Complete the upload with all part numbers and ETags. Request a fresh signature if a URL expires.
+Treat signed URLs as temporary credentials and do not log or publish them.

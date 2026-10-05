@@ -1,0 +1,184 @@
+---
+title: "Speech to Text — Batch quickstart"
+description: "Upload a file, start a batch transcription, wait for the result and download it."
+---
+
+Speech to Text turns an audio file into a transcript. The Batch API is asynchronous: you upload the
+file, submit a transcription, poll the task and download the result when it is `COMPLETED`. Batch and
+real-time results share the same History and the same Characters balance.
+
+Everything below uses the existing MyVocal API key. Start by reading
+[Authentication](/api-reference/authentication).
+
+See [availability and known limitations](/guides/stt-availability) before integrating optional
+notifications, speaker matching or processing-storage controls.
+
+## 1. Read capabilities
+
+<Card title="GET /sound_clone/api/v1/stt/capabilities" icon="circle-info" href="/api-reference/stt/capabilities">
+  Confirms the account state, the rate for this account and the accepted enum values.
+</Card>
+
+```bash
+curl https://api.myvocal.ai/sound_clone/api/v1/stt/capabilities \
+  -H "accessKey: $MYVOCAL_ACCESS_KEY"
+```
+
+## 2. Upload the audio
+
+Create an upload, send the parts, then complete it. The response gives you an `uploadId` for the next
+step.
+
+<Card title="POST /sound_clone/api/v1/stt/uploads" icon="upload" href="/api-reference/stt/createUpload">
+  Presigned multi-part upload; the server probes the file and builds the canonical audio.
+</Card>
+
+```bash
+SIZE_BYTES=$(python -c 'import os; print(os.path.getsize("meeting.wav"))')
+UPLOAD=$(curl -s https://api.myvocal.ai/sound_clone/api/v1/stt/uploads \
+  -H "accessKey: $MYVOCAL_ACCESS_KEY" -H "Content-Type: application/json" \
+  -d '{"fileName":"meeting.wav","sizeBytes":'"$SIZE_BYTES"'}')
+UPLOAD_ID=$(echo "$UPLOAD" | python -c "import json,sys;print(json.load(sys.stdin)['data']['uploadId'])")
+```
+
+The request field is `sizeBytes` (the response reports the stored size separately). For each returned
+part, ask for a presigned URL and upload the bytes:
+
+```bash
+# partNumber starts at 1 and runs to totalParts
+curl -s https://api.myvocal.ai/sound_clone/api/v1/stt/uploads/$UPLOAD_ID/parts/1 \
+  -H "accessKey: $MYVOCAL_ACCESS_KEY" -X POST
+# PUT the returned part bytes, then complete:
+curl -s https://api.myvocal.ai/sound_clone/api/v1/stt/uploads/$UPLOAD_ID/complete \
+  -H "accessKey: $MYVOCAL_ACCESS_KEY" -H "Content-Type: application/json" \
+  -d '{"parts":[{"partNumber":1,"etag":"<etag>"}]}'
+```
+
+Split the file using the returned `partSizeBytes`; PUT each part to its signed `url` and collect the
+object-storage response `ETag`. The snippets above show the request sequence; the
+[complete Python example](#complete-example) implements the byte splitting and PUT requests.
+See [Create an upload](/api-reference/stt/createUpload), [Sign a part](/api-reference/stt/signUploadPart)
+and [Complete an upload](/api-reference/stt/completeUpload) for the response fields.
+Submit only after the completed upload reports `READY`.
+
+## 3. Submit the transcription
+
+Send the `uploadId` (or a public `mediaUrl` instead) with the options you want. Use an
+`Idempotency-Key` so a retry never pays twice: the same key and the same body return the same task.
+
+<Card title="POST /sound_clone/api/v1/stt/transcriptions" icon="wand-magic-sparkles" href="/api-reference/stt/createTranscription">
+  Quotes, reserves Characters and starts the task in one call.
+</Card>
+
+```bash
+# Generate once per logical task; reuse this value and the same body for retries.
+IDEMPOTENCY_KEY=$(python -c 'import uuid; print(uuid.uuid4())')
+curl https://api.myvocal.ai/sound_clone/api/v1/stt/transcriptions \
+  -H "accessKey: $MYVOCAL_ACCESS_KEY" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $IDEMPOTENCY_KEY" \
+  -d '{"uploadId":"'"$UPLOAD_ID"'","languageHint":"en","options":{"separateSpeakers":true}}'
+```
+
+## 4. Poll, then download
+
+<Card title="GET /sound_clone/api/v1/stt/transcriptions/{transcriptionId}" icon="magnifying-glass" href="/api-reference/stt/getTranscription">
+  Read the task, transcript and billing summary. Stop polling at `COMPLETED`, `PARTIAL` or `FAILED`;
+  inspect the result or error instead of polling a failed task forever.
+</Card>
+
+<Card title="GET /sound_clone/api/v1/stt/transcriptions/{transcriptionId}/download" icon="download" href="/api-reference/stt/downloadTranscription">
+  `txt`, `json`, `srt`, `segmented_json`, `html`, `docx` or `pdf`.
+</Card>
+
+## Options and export controls
+
+`options` controls Batch processing. A representative request:
+
+```json
+{
+  "uploadId": "<uploadId>",
+  "languageHint": "en",
+  "title": "Weekly sync",
+  "waitForCompletion": false,
+  "options": {
+    "separateSpeakers": true,
+    "maxSpeakerCount": 4,
+    "alignmentLevel": "word",
+    "entityCategories": ["pii"],
+    "removeDisfluencies": true,
+    "vocabularyHints": ["MyVocal", "Kubernetes"],
+    "separateChannels": false,
+    "exportFormats": ["txt", "json", "srt"],
+    "exportOptions": [
+      { "format": "srt", "maxCharactersPerLine": 42, "maxSegmentDurationS": 6 },
+      { "format": "json", "includeTimestamps": true, "includeSpeakers": true }
+    ]
+  }
+}
+```
+
+Read the [Batch option reference](/api-reference/stt/createTranscription#batch-options) and the
+live constraints in [capabilities](/api-reference/stt/capabilities). `exportFormats` selects the artefacts; each `exportOptions` entry applies nested
+controls to one format and does not change another. An unsupported combination is refused at submit
+with `INPUT_INVALID` rather than silently ignored. Some invalid entity category values currently
+fail asynchronously as `MEDIA_UNREADABLE`; see [the known issue](/guides/stt-availability).
+
+## Completion notifications
+
+Enable a signed completion callback inside the same `options` block. Notifications concern
+`COMPLETED` tasks; keep polling to detect failures and other terminal outcomes.
+
+<Note>
+Completion delivery is available, but production verification of raw-body signatures, retry delivery
+and receiver de-duplication is not yet complete. Use polling as your authoritative completion path
+and verify your receiver before relying on notifications.
+</Note>
+
+```json
+{
+  "options": {
+    "notifyOnCompletion": true,
+    "notifyUrl": "https://customer.example/stt-callback",
+    "clientMetadata": { "job": "weekly-sync" },
+    "notificationSigningSecret": "<write-only secret>"
+  }
+}
+```
+
+- `notifyUrl` must be a public `http`/`https` URL; private, loopback, link-local and cloud-metadata
+  addresses are refused on the real connection.
+- `notificationSigningSecret` is write-only: it is stored encrypted and never returned or logged.
+  Changing the URL or the secret under the same `Idempotency-Key` is a different request.
+- MyVocal attempts delivery with bounded exponential backoff and a stable `eventId`. Delivery can
+  fail after retries are exhausted; a receiver can also receive duplicates. Each signed
+delivery carries three MyVocal headers:
+
+  | Header | Meaning |
+  |---|---|
+  | `X-MyVocal-Timestamp` | The signing timestamp. |
+  | `X-MyVocal-Signature` | `v1=<hex HMAC-SHA256(secret, timestamp + "." + rawBody)>`. |
+  | `X-MyVocal-Event-Id` | The stable event id, for de-duplication. |
+
+  Read the timestamp from `X-MyVocal-Timestamp`, then compute the HMAC over the **concatenation of
+  the timestamp, a `.` and the raw request body bytes**:
+
+  ```python
+  import hashlib, hmac
+  def verify(secret: bytes, timestamp: str, raw_body: bytes, header: str) -> bool:
+      expected = hmac.new(secret, timestamp.encode() + b"." + raw_body, hashlib.sha256).hexdigest()
+      return hmac.compare_digest("v1=" + expected, header)
+  ```
+
+  Verify against the **raw bytes exactly as received**; do not re-serialize the JSON, and do not sign
+  the body without the timestamp prefix. Then de-duplicate by `X-MyVocal-Event-Id`.
+- **Polling is the authoritative result.** A missed or failed callback never changes the task; do not
+  retry the transcription because a callback was missed.
+
+## Complete example
+
+The runnable Batch client implements upload, submit, poll and download, then **deletes the test
+transcription**. Running it again after completion creates a new billable task:
+[`examples/stt/stt_batch_minimal.py`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/stt/stt_batch_minimal.py).
+
+Read [Characters and quotes](/guides/characters-and-quotes) for how the charge and the shared balance
+work, and [Asynchronous jobs and retries](/guides/async-jobs-and-retries) for retry rules.

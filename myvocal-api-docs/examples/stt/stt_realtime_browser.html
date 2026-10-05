@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>MyVocal real-time Speech to Text — browser example</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 2rem; max-width: 46rem; }
+  button { font: inherit; padding: .4rem .9rem; margin-right: .5rem; }
+  pre { background: #f4f4f5; padding: .75rem; overflow: auto; white-space: pre-wrap; }
+  input { font: inherit; padding: .35rem; width: 22rem; }
+</style>
+</head>
+<body>
+<h1>MyVocal real-time Speech to Text — browser client</h1>
+<p>
+  This page records microphone audio and streams it to MyVocal. It exchanges your
+  API key for a short-lived ticket, then connects the socket with the ticket,
+  so the long-lived key never appears in a URL. This is a local developer demo;
+  in a customer application, keep the API key on your backend and return only a
+  session ticket to the browser. The session declares the microphone's real sample rate, and
+  Stop drains the audio worklet so the tail is not lost.
+</p>
+<p>
+  API base <input id="base" value="http://127.0.0.1:8080" /> and access key
+  <input id="key" type="password" placeholder="accessKey" />
+</p>
+<p>
+  <button id="start">Start recording</button>
+  <button id="stop" disabled>Stop and finish</button>
+</p>
+<pre id="log"></pre>
+
+<script>
+const log = (msg) => { document.getElementById('log').textContent += msg + "\n"; };
+const base = () => document.getElementById('base').value.replace(/\/$/, '');
+const key = () => document.getElementById('key').value;
+const rt = '/sound_clone/api/v1/stt/realtime';
+
+// MyVocal input encodings; the session is created for the microphone's real rate.
+const ENCODINGS = { 8000: 'pcm_s16le_8000', 16000: 'pcm_s16le_16000', 22050: 'pcm_s16le_22050',
+  24000: 'pcm_s16le_24000', 44100: 'pcm_s16le_44100', 48000: 'pcm_s16le_48000' };
+
+/** Builds the socket URL from the HTTP base and the returned path, for http or https. */
+function socketUrl(path) {
+  const url = new URL(base() + path);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  return url.toString();
+}
+
+// One session's live state. `generation` invalidates the previous session's timers and handlers.
+let socket = null, context = null, worklet = null, stream = null, session = null;
+let captured = 0, terminal = null, finisher = null, drained = false, drainState = 'none', generation = 0;
+
+// The capture worklet counts every frame it posts. On `stop` it confirms it flushed its own queue
+// with a final `stopped` message, so the main thread knows the tail is complete before it finishes.
+const workletCode = `
+class Capture extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.stopping = false;
+    this.stopped = false;
+    this.port.onmessage = (event) => { if (event.data && event.data.cmd === 'stop') this.stopping = true; };
+  }
+  process(inputs) {
+    if (this.stopping) {
+      if (!this.stopped) { this.stopped = true; this.port.postMessage({ type: 'stopped' }); }
+      return false;
+    }
+    const input = inputs[0][0];
+    if (input) this.port.postMessage({ type: 'audio', samples: input.slice(0) });
+    return true;
+  }
+}
+registerProcessor('capture', Capture);`;
+
+async function rest(method, path, body) {
+  const response = await fetch(base() + path, {
+    method,
+    headers: Object.assign({ accessKey: key(), 'Content-Type': 'application/json' },
+      body ? { 'Idempotency-Key': crypto.randomUUID() } : {}),
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const payload = await response.json();
+  if (payload.code !== 1) throw new Error(`MyVocal error ${payload.code}: ${payload.message}`);
+  return payload.data;
+}
+
+function encodeFrame(samples) {
+  const pcm = new Int16Array(samples.length);
+  for (let i = 0; i < samples.length; i++) {
+    const clamped = Math.max(-1, Math.min(1, samples[i]));
+    pcm[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
+  }
+  let binary = '';
+  const bytes = new Uint8Array(pcm.buffer);
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+async function start() {
+  generation += 1;
+  const myGen = generation;
+  terminal = null;
+  captured = 0;
+  drained = false;
+  drainState = 'none';
+
+  const probe = new AudioContext();
+  const rate = ENCODINGS[probe.sampleRate];
+  await probe.close();
+  if (!rate) throw new Error('unsupported microphone sample rate ' + probe.sampleRate);
+
+  session = await rest('POST', rt + '/sessions', { languageHint: 'en', options: { inputEncoding: rate } });
+  const ticket = await rest('POST', rt + '/sessions/' + encodeURIComponent(session.sessionId) + '/tickets');
+
+  socket = new WebSocket(socketUrl(ticket.streamUrl) + '?ticket=' + encodeURIComponent(ticket.ticket));
+  socket.onmessage = (message) => {
+    if (myGen !== generation) return;
+    const event = JSON.parse(message.data);
+    if (event.eventType !== 'usage.updated') log(event.eventType + (event.payload.text ? ': ' + event.payload.text : ''));
+    if (event.eventType === 'session.completed') { terminal = 'COMPLETED'; release(); }
+    if (event.eventType === 'session.error') { terminal = event.payload.errorCode; release(); }
+  };
+  // A transport close (for example 1006) during the session must release the microphone and the
+  // capture graph too, not only a protocol-level error event.
+  socket.onclose = () => {
+    if (myGen !== generation) return;
+    if (!terminal) terminal = 'TRANSPORT_CLOSED';
+    release();
+  };
+  await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
+
+  context = new AudioContext();
+  await context.audioWorklet.addModule(URL.createObjectURL(new Blob([workletCode], { type: 'text/javascript' })));
+  stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  worklet = new AudioWorkletNode(context, 'capture');
+  worklet.port.onmessage = (event) => {
+    if (myGen !== generation) return;
+    const data = event.data;
+    if (data && data.type === 'stopped') { drained = true; drainState = 'confirmed'; return; }
+    const samples = data && data.type === 'audio' ? data.samples : data;
+    if (!samples || !socket || socket.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify({
+      eventType: 'audio.append',
+      epoch: 1,
+      payload: { audioBase64: encodeFrame(samples), sampleOffset: captured, capturedSamples: captured + samples.length },
+    }));
+    captured += samples.length;
+  };
+  context.createMediaStreamSource(stream).connect(worklet);
+  document.getElementById('start').disabled = true;
+  document.getElementById('stop').disabled = false;
+}
+
+/** Stops capture, waits for the worklet to flush its queued tail, then sends the exact total. */
+function stop() {
+  const myGen = generation;
+  document.getElementById('stop').disabled = true;
+  if (!worklet) { finish(myGen); return; }
+  worklet.port.postMessage({ cmd: 'stop' });
+  const deadline = Date.now() + 2000;
+  const tryFinish = () => {
+    if (myGen !== generation) return;
+    if (drained) { finish(myGen); return; }
+    if (Date.now() > deadline) {
+      // The deadline is only a bound. Without the worklet's flush confirmation the tail is not proven
+      // complete, so the exit reports it instead of claiming a fully drained capture.
+      drainState = 'timeout';
+      log('drain: no worklet confirmation before the deadline; the tail may be incomplete');
+      finish(myGen);
+      return;
+    }
+    setTimeout(tryFinish, 20);
+  };
+  setTimeout(tryFinish, 20);
+}
+
+function finish(myGen) {
+  if (myGen !== generation) return;
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ eventType: 'session.finish', epoch: 1, payload: { capturedSamples: captured } }));
+    finisher = setTimeout(() => {
+      if (myGen === generation && !terminal) { terminal = 'TIMEOUT'; release(); }
+    }, 30000);
+  } else {
+    release();
+  }
+}
+
+/** Releases the microphone track, worklet, capture context, socket, timers and buttons. */
+function release() {
+  generation += 1;
+  if (finisher) { clearTimeout(finisher); finisher = null; }
+  if (worklet) { try { worklet.disconnect(); } catch (ignored) {} worklet.port.onmessage = null; worklet = null; }
+  if (context) { try { context.close(); } catch (ignored) {} context = null; }
+  if (stream) { stream.getTracks().forEach((track) => track.stop()); stream = null; }
+  if (socket) { try { socket.close(); } catch (ignored) {} socket = null; }
+  drained = false;
+  document.getElementById('start').disabled = false;
+  document.getElementById('stop').disabled = true;
+  log('terminal: ' + terminal);
+}
+
+document.getElementById('start').onclick = () => start().catch((error) => { log('error: ' + error.message); release(); });
+document.getElementById('stop').onclick = stop;
+</script>
+</body>
+</html>

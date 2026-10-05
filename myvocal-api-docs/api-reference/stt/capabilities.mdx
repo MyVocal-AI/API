@@ -1,0 +1,64 @@
+---
+title: "Speech to Text capabilities"
+api: "GET https://api.myvocal.ai/sound_clone/api/v1/stt/capabilities"
+description: "Read the account state, rate, models and accepted option values for Batch and real-time."
+---
+
+Read this endpoint first. It reports what the account may do and which option values the write
+endpoints accept, in MyVocal field names.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Response
+
+<ResponseField name="modelId" type="string">
+  The default (Batch) model: `myvocal_stt_v1`. Real-time results report
+  `myvocal_stt_realtime_v1`.
+</ResponseField>
+
+<ResponseField name="modes" type="object">
+  `{ "batch": "AVAILABLE", "realtime": "AVAILABLE" }`.
+</ResponseField>
+
+<ResponseField name="models" type="array">
+  Each entry is `{ modelId, mode, state }`. A `state` of `AVAILABLE` means the model is ready to use.
+</ResponseField>
+
+<ResponseField name="requestParameters" type="object">
+  The accepted Batch option fields and their constraints. `options.processingContentStorage` notes
+  that account eligibility is not verified.
+</ResponseField>
+
+<ResponseField name="realtimeParameters" type="object">
+  The accepted real-time session options, for example `options.inputEncoding` and
+  `options.segmentCommitMode`, plus the `Idempotency-Key` header requirement.
+</ResponseField>
+
+<ResponseField name="downloadFormats" type="array">
+  Every format the download endpoint accepts: `txt`, `json`, `srt`, `segmented_json`, `html`, `docx`,
+  `pdf`.
+</ResponseField>
+
+<ResponseField name="account" type="object">
+  The plan, rate and balances for this key's account.
+</ResponseField>
+
+```json
+{
+  "code": 1,
+  "message": "success",
+  "data": {
+    "modelId": "myvocal_stt_v1",
+    "modes": { "batch": "AVAILABLE", "realtime": "AVAILABLE" },
+    "models": [
+      { "modelId": "myvocal_stt_v1", "mode": "BATCH", "state": "AVAILABLE" },
+      { "modelId": "myvocal_stt_realtime_v1", "mode": "REALTIME", "state": "AVAILABLE" }
+    ],
+    "downloadFormats": ["txt", "json", "srt", "segmented_json", "html", "docx", "pdf"]
+  }
+}
+```

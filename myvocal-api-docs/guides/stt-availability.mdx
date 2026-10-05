@@ -1,0 +1,69 @@
+---
+title: "Speech to Text availability"
+description: "Available STT workflows, current limitations and integration guidance."
+---
+
+Batch and Real-time Speech to Text are available at `api.myvocal.ai` with your existing
+`accessKey`. Both use the workspace's STT rates, shared Characters balance and History.
+This page describes the release verified on October 5, 2026.
+
+## Available workflows
+
+- **Batch:** multipart upload or a public `mediaUrl`, asynchronous submission and polling,
+  optional bounded wait, transcript retrieval and deletion.
+- **Results and exports:** text, word/character alignment when requested, supported entity and
+  text-processing options, per-channel results, and `txt`, `json`, `srt`, `segmented_json`,
+  `html`, `docx` and `pdf` downloads.
+- **Real-time:** session creation, audio frames, partial/final results, manual or VAD commits,
+  pause/resume within the tested session flow, explicit finish and one-use browser tickets.
+- **Billing:** optional processing features are included in the base STT rate. Multiple audio
+  channels do not multiply the price of the same file timeline. Replaying a submission with the
+  same idempotency key and unchanged input does not start another billable task.
+
+Read [capabilities](/api-reference/stt/capabilities) for account access, rates and current option
+constraints. An available mode does not mean every optional feature or option combination is supported.
+
+## Known parameter error issue
+
+Some invalid `options.entityCategories` values currently result in an asynchronous `FAILED` task
+with `error.errorCode = MEDIA_UNREADABLE`, instead of `INPUT_INVALID`. This can happen even when
+the audio is valid. Review the requested categories before replacing the file or submitting again.
+The failed transcription's reservation is released; check `billing` for the actual amounts.
+
+Do not retry an invalid parameter unchanged. A corrected request is a new logical task and needs
+a new `Idempotency-Key`. General schema errors and unsupported option combinations are still
+rejected as input errors.
+
+## Completion notifications
+
+Completion delivery is implemented. Production verification of raw-body HMAC signatures, retries
+after a non-success response and receiver de-duplication is still incomplete. Keep polling as the
+authoritative result path. See the [notification contract](/guides/stt-batch-quickstart#completion-notifications)
+to implement and verify your receiver. Retries are bounded; delivery is not guaranteed.
+
+## Real-time disconnections and recovery
+
+Explicit `finish`, reading the resulting History record, and repeated `finish` have been verified
+after a service replacement, including release of unconfirmed audio's reserved Characters.
+The complete disconnect → pause → resume into a new epoch flow across service replacement has
+not yet been verified. Do not assume uninterrupted recording or automatic recovery of missing audio.
+
+After a disconnect, read the session and its `accepting` state. Use the REST finish endpoint to
+close it when you are done; inspect `PARTIAL` results and usage. Never treat a closed socket as
+proof of successful transcription or final billing.
+
+## Speaker matching and storage requests
+
+`matchKnownSpeakers` is not available. Speaker separation within a recording is a different feature
+and remains available through the documented options.
+
+`processingContentStorage` requests a processing-storage preference. Eligibility and the actual
+retention effect have not been verified. Acceptance of the request, or absence of a
+`PROCESSING_STORAGE_NOT_APPLIED` notice, is **not a zero-retention guarantee**.
+
+## Client validation coverage
+
+Production real-time calls have been verified for PCM at 8, 16 and 48 kHz and μ-law at 8 kHz.
+PCM at 22.05, 24 and 44.1 kHz is implemented and locally tested, but has not yet been verified
+in production. The browser demo has behavior tests; real-microphone/device acceptance remains
+unverified. Always declare the actual sample rate and test your capture device.

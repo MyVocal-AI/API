@@ -1,0 +1,62 @@
+---
+title: "Create an upload"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/stt/uploads"
+description: "Reserve a presigned multi-part upload for a Batch transcription source."
+---
+
+Creates a multi-part upload. Send the parts to the returned presigned URLs, then complete the upload.
+The server probes the file and builds the canonical audio used for the transcription.
+
+### Header
+
+<ParamField header="accessKey" type="string" required>
+  API key for authentication.
+</ParamField>
+
+### Body
+
+<ParamField body="fileName" type="string" required>
+  The original file name.
+</ParamField>
+
+<ParamField body="sizeBytes" type="number" required>
+  The exact file size in bytes, within the technical upload ceiling. This is the request field; the response reports the stored size as `media`/`fileSizeBytes`.
+</ParamField>
+
+<ParamField body="contentType" type="string">
+  Media type, for example `audio/wav`. The uploaded bytes are inspected before transcription.
+</ParamField>
+
+### Response
+
+<ResponseField name="uploadId" type="string">
+  The upload id to pass to create-transcription.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  `UPLOADING` initially; complete the upload and read its state before submitting. Analysis can
+  result in `READY` or `FAILED`.
+</ResponseField>
+
+<ResponseField name="partSizeBytes" type="number">
+  The required part size.
+</ResponseField>
+
+<ResponseField name="totalParts" type="number">
+  How many parts to send.
+</ResponseField>
+
+<ResponseField name="media" type="object">
+  After the file is probed: `mediaType`, `containerLabel`, `containerDurationMs` and the `audioTracks`
+  (each with `index`, `codec`, `channels`, `sampleRateHz`, `durationMs`, `language` and
+  `defaultTrack`).
+</ResponseField>
+
+<Note>
+Signed part URLs expire. Request new signatures if an upload takes long, and complete the upload
+before submitting the transcription.
+</Note>
+
+Continue with [sign a part](/api-reference/stt/signUploadPart),
+[complete the upload](/api-reference/stt/completeUpload) and
+[read the upload](/api-reference/stt/getUpload).
