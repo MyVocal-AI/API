@@ -1,0 +1,19 @@
+---
+title: "Pause a real-time session"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/stt/realtime/sessions/{sessionId}/pause"
+description: "Pause recording and commit the current segment."
+---
+
+<ParamField header="accessKey" type="string" required>MyVocal API key.</ParamField>
+<ParamField path="sessionId" type="string" required>The session id.</ParamField>
+<ParamField body="capturedSamples" type="string | number">
+Total captured samples, after your capture queue has been flushed. Prefer a decimal string.
+</ParamField>
+
+Stop capture and send any buffered frames before pausing. The response is the
+[session view](/api-reference/stt/getSession). A segment can still receive its final result
+while the session is paused. Continue with [resume](/api-reference/stt/resumeSession),
+or [finish](/api-reference/stt/finishSession) when recording is over.
+
+For a WebSocket client, the equivalent event is `session.pause`.
+See [recovery limitations](/guides/stt-availability#real-time-disconnections-and-recovery).

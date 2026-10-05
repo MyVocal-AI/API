@@ -4,8 +4,8 @@ api: "GET https://api.myvocal.ai/sound_clone/api/v1/stt/transcriptions/{transcri
 description: "Download the result as txt, json, srt, segmented_json, html, docx or pdf."
 ---
 
-Returns the result as a file. The bytes contain only MyVocal fields and metadata; generated
-PDF/DOCX/HTML carry no provider template or brand, and the customer's text is never rewritten.
+Returns the result as a file using MyVocal fields and formatting. Downloads use the original
+transcription result; later edits in the workspace do not overwrite this API result.
 
 ### Path
 

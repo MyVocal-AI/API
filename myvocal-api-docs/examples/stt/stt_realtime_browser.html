@@ -14,9 +14,10 @@
 <h1>MyVocal real-time Speech to Text — browser client</h1>
 <p>
   This page records microphone audio and streams it to MyVocal. It exchanges your
-  API key once for a short-lived ticket, then connects the socket with the ticket,
-  so the long-lived key never appears in a URL. Nothing is sent to any provider
-  from the browser. The session declares the microphone's real sample rate, and
+  API key for a short-lived ticket, then connects the socket with the ticket,
+  so the long-lived key never appears in a URL. This is a local developer demo;
+  in a customer application, keep the API key on your backend and return only a
+  session ticket to the browser. The session declares the microphone's real sample rate, and
   Stop drains the audio worklet so the tail is not lost.
 </p>
 <p>

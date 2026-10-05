@@ -1,0 +1,19 @@
+---
+title: "Resume a real-time session"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/stt/realtime/sessions/{sessionId}/resume"
+description: "Open the next recording segment of an existing session."
+---
+
+<ParamField header="accessKey" type="string" required>MyVocal API key.</ParamField>
+<ParamField path="sessionId" type="string" required>The session id.</ParamField>
+<ParamField body="capturedSamples" type="string | number">
+The total capture cursor for the session, if available. Prefer a decimal string.
+</ParamField>
+
+Returns the [session view](/api-reference/stt/getSession). Use the returned `epoch` for
+subsequent frames and reset the new epoch's `sampleOffset` to zero; `capturedSamples`
+remains the total for the session. Check `accepting` before sending audio.
+
+A browser opening another socket needs a fresh single-use ticket. Resume does not restore
+audio lost before it reached the service. Full resume across a service replacement remains
+[unverified](/guides/stt-availability#real-time-disconnections-and-recovery).

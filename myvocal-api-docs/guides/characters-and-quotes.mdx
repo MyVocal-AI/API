@@ -1,11 +1,36 @@
 ---
 title: "Characters, quotes and billing"
-description: "How MyVocal charges Text-to-Music and Interpretation, how quotes reserve Characters, and how settlement and release work."
+description: "How Speech to Text, Text-to-Music and Interpretation use Characters, reservations, settlement and release."
 ---
 
 <Info>
 Text-to-Music and Interpretation consume **Characters**. Nothing is charged by a read call: the cost is always quoted first, then reserved when you accept the quote. Quotes are free.
 </Info>
+
+## Speech to Text billing
+
+STT shares the workspace's Characters balance, STT rate card and History. Read
+[STT capabilities](/api-reference/stt/capabilities) for the account's Batch rate; use the returned
+session usage and final task billing for Real-time. Do not assume the two modes have the same rate.
+
+Batch submission prices and reserves the task in one call; there is no separate public STT quote
+endpoint. Real-time reserves capacity while recording and settles confirmed audio when finished.
+Unused reserved Characters are released. A `PARTIAL` result charges only the confirmed billable
+audio; use the returned billing values rather than the length you attempted to send.
+
+The duration-based calculation is `ceil(billableSeconds × ratePerMinute / 60)`. The service
+calculates this from the audio sample count. Optional processing features are included in the base
+rate, and multiple channels do not multiply the same file timeline's price. Equal-duration audio
+at different supported sample rates/encodings has the same charge at the same mode and rate.
+
+Read `billing.state`, `reservedCharacters`, `settledCharacters`, `releasedCharacters` and
+`billableCharacters` on the transcription. While reserved, `billableCharacters` can reflect the
+hold; it is not proof of final consumption. Monetary quantities here are Characters, not currency.
+Characters, sample counts and millisecond durations use decimal strings; bounded rates and indices
+are numbers. Reads, downloads, notification retries and repeated finish do not charge again.
+
+See [STT availability](/guides/stt-availability) for current validation and recovery limitations.
+The separate quote endpoints and product-specific rate tables below apply to Music and Interpretation.
 
 ## Always quote, never estimate
 

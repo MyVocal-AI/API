@@ -1,16 +1,17 @@
 ---
 title: "Introduction"
-description: "Build with MyVocal: voice cloning, Text-to-Speech, AI Cover, Text-to-Music and Interpretation."
+description: "Build with MyVocal: Speech to Text, voice cloning, Text-to-Speech, AI Cover, Text-to-Music and Interpretation."
 ---
 
 <Info>
-MyVocal exposes several product APIs behind one public host and one `accessKey` header: **Voice**, **Text-to-Speech** (including the Accent model), **AI Cover**, **Text-to-Music** and **Interpretation**.
+MyVocal exposes several product APIs behind one public host and one `accessKey` header: **Speech to Text**, **Voice**, **Text-to-Speech** (including the Accent model), **AI Cover**, **Text-to-Music** and **Interpretation**.
 </Info>
 
 ## Product lines
 
 | Product line | What it does | Response style |
 |---|---|---|
+| Speech to Text | Transcribe files or live audio | Batch tasks with polling; real-time WebSocket events |
 | Voice | Clone and manage voices | Synchronous JSON |
 | Text-to-Speech | Synthesize speech from text | Audio stream (default and `myvocal_v3`) |
 | AI Cover | Cover a song with a cloned voice | Asynchronous callback (webhook) |
@@ -19,6 +20,7 @@ MyVocal exposes several product APIs behind one public host and one `accessKey` 
 
 ## What you can build with MyVocal
 
+- Transcribe recordings with [Batch STT](/guides/stt-batch-quickstart), or stream live audio with [Real-time STT](/guides/stt-realtime-quickstart).
 - Clone a custom voice with the Voice API.
 - Generate speech with that voice using the Text-to-Speech API.
 - Create AI song covers with the same voice using the AI Cover API.
@@ -39,6 +41,7 @@ Text-to-Music and Interpretation are **not** voice-dependent. They take a text b
 
 ## Synchronous, streaming and asynchronous APIs
 
+- **Speech to Text** accepts uploaded files or public media URLs for Batch, and audio frames over a WebSocket for Real-time. It reuses your existing API key, STT rates, Characters balance and workspace History. See [STT availability and known limitations](/guides/stt-availability).
 - **Voice** and **user info** return JSON immediately.
 - **Text-to-Speech** returns an audio stream; read `Content-Type` before trusting the body.
 - **AI Cover** uses a callback URL that you provide. See [Callback](/callback).
@@ -70,6 +73,12 @@ portuguese_la
 ## Next steps
 
 <CardGroup cols={3}>
+  <Card title="Batch Speech to Text" icon="file-audio" href="/guides/stt-batch-quickstart">
+    Upload or link a recording, transcribe it and download the result.
+  </Card>
+  <Card title="Real-time Speech to Text" icon="microphone" href="/guides/stt-realtime-quickstart">
+    Stream audio and receive partial and final transcripts.
+  </Card>
   <Card title="Quickstart" icon="rocket" href="/quickstart">
     Make your first MyVocal API call in a few steps.
   </Card>

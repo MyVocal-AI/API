@@ -1,0 +1,22 @@
+---
+title: "Complete an upload"
+api: "POST https://api.myvocal.ai/sound_clone/api/v1/stt/uploads/{uploadId}/complete"
+description: "Complete the uploaded parts and analyze the audio."
+---
+
+<ParamField header="accessKey" type="string" required>MyVocal API key.</ParamField>
+<ParamField path="uploadId" type="string" required>The upload id.</ParamField>
+<ParamField body="parts" type="array" required>
+All uploaded parts as objects with numeric `partNumber` and string `etag`.
+</ParamField>
+
+```json
+{"parts":[{"partNumber":1,"etag":"<ETag from the storage PUT>"}]}
+```
+
+Read `data.state` before submitting a transcription. A `READY` upload includes `media`
+and `media.audioTracks`; use the selected track's `index` as `audioTrackIndex` when
+multiple tracks exist. A `FAILED` upload reports `errorCode`; invalid audio can return
+`MEDIA_UNREADABLE`. HTTP 200 alone does not prove the file is ready.
+
+You can also [read the upload](/api-reference/stt/getUpload) to retrieve its current state.

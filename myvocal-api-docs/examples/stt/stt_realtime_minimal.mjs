@@ -2,8 +2,8 @@
 /**
  * MyVocal real-time Speech to Text — minimal Node.js client.
  *
- * Requires Node 18+ for global `fetch`, and Node 22+ for the global `WebSocket`
- * handler with a custom `headers` option (verified on Node v22). `node:crypto`
+ * Requires Node 22+ for global `fetch` and `WebSocket`. The socket authenticates
+ * with a one-use ticket; the native WebSocket does not accept custom headers. `node:crypto`
  * supplies the request id. Set the environment first:
  *
  *   MYVOCAL_API_BASE=http://127.0.0.1:8080        # local or https://api.myvocal.ai
@@ -50,7 +50,10 @@ async function main() {
     { languageHint: 'en', options: { inputEncoding: 'pcm_s16le_16000' } });
   console.log('session', session.sessionId, 'transcription', session.transcriptionId);
 
-  const socket = new WebSocket(socketUrl(BASE, session.streamUrl), { headers: { accessKey: KEY } });
+  const ticket = await call('POST', RT + '/sessions/' + encodeURIComponent(session.sessionId) + '/tickets');
+  const stream = new URL(socketUrl(BASE, ticket.streamUrl));
+  stream.searchParams.set('ticket', ticket.ticket);
+  const socket = new WebSocket(stream);
   const events = [];
   socket.addEventListener('message', (message) => events.push(JSON.parse(message.data)));
   await new Promise((resolve, reject) => {

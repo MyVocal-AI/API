@@ -58,6 +58,20 @@ Three differences from the synchronous endpoints are worth remembering:
   </Card>
 </CardGroup>
 
+## Speech to Text
+
+Batch and Real-time STT use the same `accessKey` under
+`https://api.myvocal.ai/sound_clone/api/v1/stt`. No new key, cloned voice or workspace login is
+required. The key determines the owner of uploads, transcriptions and sessions.
+
+Use `Idempotency-Key` for Batch submission and real-time session creation, with a fresh key per
+logical task and the same key/body for a retry. Server WebSocket clients can send `accessKey`
+as a handshake header. Browser clients use [one-use tickets](/api-reference/stt/createTicket);
+keep the long-lived API key on your backend in a customer-facing application.
+
+See [Batch](/guides/stt-batch-quickstart), [Real-time](/guides/stt-realtime-quickstart) and
+[current limitations](/guides/stt-availability).
+
 ## Accent model requests
 
 The Accent model (`myvocal_v3_accent_enhance`) reuses everything on this page: the same `accessKey` header, the same API host and the same TTS endpoints. There is no separate key, scope or endpoint to request, and no extra header to send.

@@ -17,8 +17,8 @@ reconnect requests a fresh one. A replayed or expired ticket is refused at the h
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication. This is the only place the key is used; it never appears in the socket
-  URL.
+  API key for this REST request. Keep it on your backend in customer-facing applications;
+  return only the session and ticket to the browser. Never put the API key in the socket URL.
 </ParamField>
 
 ### Response
@@ -47,5 +47,6 @@ reconnect requests a fresh one. A replayed or expired ticket is refused at the h
 const ticket = await rest('POST', `/sessions/${sessionId}/tickets`);
 const url = new URL(apiBase + ticket.streamUrl);
 url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-const socket = new WebSocket(url + '?ticket=' + encodeURIComponent(ticket.ticket));
+url.searchParams.set('ticket', ticket.ticket);
+const socket = new WebSocket(url);
 ```

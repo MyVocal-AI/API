@@ -26,7 +26,7 @@ Returns one transcription from the shared History. Poll this until `status` is `
 </ResponseField>
 
 <ResponseField name="status" type="string">
-  `QUEUED`, `PROCESSING`, `COMPLETED`, `PARTIAL` or `FAILED`. A real-time task reports `COMPLETED`
+  `QUEUED`, `PROCESSING`, `RECONCILING`, `COMPLETED`, `PARTIAL` or `FAILED`. A real-time task reports `COMPLETED`
   when it settled normally.
 </ResponseField>
 
@@ -47,11 +47,15 @@ Returns one transcription from the shared History. Poll this until `status` is `
 </ResponseField>
 
 <ResponseField name="transcript" type="object">
+  `null` before a result exists; a completed silent recording can have an empty transcript.
   `text`, `languageCode`, `languageConfidence`, `speakers`, `segments` and `channelResults`. Each
   segment carries `id`, `speakerId`, `channelIndex`, `startMs`, `endMs`, `text`, `timingStatus`,
   `tokens` and `characterAlignments`. Entities, the edited text and the per-channel results are
   MyVocal fields; a provider value is never exposed raw.
 </ResponseField>
+
+See [known limitations](/guides/stt-availability) for current parameter-error classification and
+optional-feature behavior. Stop polling terminal tasks; read `billing` to determine actual charges.
 
 <ResponseField name="billing" type="object">
   The same billing summary as create. `billableCharacters` is what this task actually charges.

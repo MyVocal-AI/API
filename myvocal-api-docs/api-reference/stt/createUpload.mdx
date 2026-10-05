@@ -16,11 +16,15 @@ The server probes the file and builds the canonical audio used for the transcrip
 ### Body
 
 <ParamField body="fileName" type="string" required>
-  The original file name, used for the History title default.
+  The original file name.
 </ParamField>
 
 <ParamField body="sizeBytes" type="number" required>
   The exact file size in bytes, within the technical upload ceiling. This is the request field; the response reports the stored size as `media`/`fileSizeBytes`.
+</ParamField>
+
+<ParamField body="contentType" type="string">
+  Media type, for example `audio/wav`. The uploaded bytes are inspected before transcription.
 </ParamField>
 
 ### Response
@@ -30,7 +34,8 @@ The server probes the file and builds the canonical audio used for the transcrip
 </ResponseField>
 
 <ResponseField name="state" type="string">
-  `CREATED`, then `UPLOADING`, then `READY`.
+  `UPLOADING` initially; complete the upload and read its state before submitting. Analysis can
+  result in `READY` or `FAILED`.
 </ResponseField>
 
 <ResponseField name="partSizeBytes" type="number">
@@ -51,3 +56,7 @@ The server probes the file and builds the canonical audio used for the transcrip
 Signed part URLs expire. Request new signatures if an upload takes long, and complete the upload
 before submitting the transcription.
 </Note>
+
+Continue with [sign a part](/api-reference/stt/signUploadPart),
+[complete the upload](/api-reference/stt/completeUpload) and
+[read the upload](/api-reference/stt/getUpload).

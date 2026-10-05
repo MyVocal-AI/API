@@ -1,0 +1,16 @@
+---
+title: "Get an upload"
+api: "GET https://api.myvocal.ai/sound_clone/api/v1/stt/uploads/{uploadId}"
+description: "Read upload state, detected media and audio tracks."
+---
+
+<ParamField header="accessKey" type="string" required>MyVocal API key.</ParamField>
+<ParamField path="uploadId" type="string" required>The upload id.</ParamField>
+
+The response's `data` contains `uploadId`, `state`, `fileName`, `fileSizeBytes`,
+`partSizeBytes`, `totalParts`, `media` and, when relevant, `errorCode`.
+Byte totals and duration fields use decimal strings; part counts and track indices use numbers.
+
+Once `READY`, `media.audioTracks` describes each track with `trackId`, `index`, `codec`,
+`channels`, `sampleRateHz`, `durationMs`, `language`, `title` and `defaultTrack`.
+Only the API key's owner can read the upload.

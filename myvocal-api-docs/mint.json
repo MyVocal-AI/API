@@ -44,8 +44,12 @@
       "pages": [
         "guides/stt-batch-quickstart",
         "guides/stt-realtime-quickstart",
+        "guides/stt-availability",
         "api-reference/stt/capabilities",
         "api-reference/stt/createUpload",
+        "api-reference/stt/signUploadPart",
+        "api-reference/stt/completeUpload",
+        "api-reference/stt/getUpload",
         "api-reference/stt/createTranscription",
         "api-reference/stt/getTranscription",
         "api-reference/stt/listTranscriptions",
@@ -53,6 +57,8 @@
         "api-reference/stt/deleteTranscription",
         "api-reference/stt/createSession",
         "api-reference/stt/getSession",
+        "api-reference/stt/pauseSession",
+        "api-reference/stt/resumeSession",
         "api-reference/stt/finishSession",
         "api-reference/stt/createTicket"
       ]

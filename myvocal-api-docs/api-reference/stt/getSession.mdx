@@ -48,12 +48,12 @@ received/captured cursors and whether the socket is `accepting` audio.
 
 <ResponseField name="lines" type="array">
   The committed lines: `id`, `text`, `revisedText`, `languageCode`, `languageProbability` and
-  `entities`.
+  `entities`, `words` and `characterAlignments`.
 </ResponseField>
 
 <ResponseField name="notices" type="array">
-  Provider warnings mapped to MyVocal notices, for example `PROCESSING_STORAGE_NOT_APPLIED`. A notice
-  is not a success guarantee.
+  Processing notices, for example `PROCESSING_STORAGE_NOT_APPLIED`. The absence of a notice does
+  not guarantee that a storage preference was applied.
 </ResponseField>
 
 <ResponseField name="usage" type="object">

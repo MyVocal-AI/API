@@ -7,6 +7,9 @@ The real-time API streams audio over a WebSocket and returns partial and final t
 produced. Like Batch, it uses the existing MyVocal API key, the same Characters balance and the same
 History.
 
+Read [availability and known limitations](/guides/stt-availability), especially the connection
+recovery and processing-storage notes.
+
 ## 1. Create a session
 
 Create a session with an `Idempotency-Key` and the options you want. The response returns a
@@ -17,9 +20,11 @@ Create a session with an `Idempotency-Key` and the options you want. The respons
 </Card>
 
 ```bash
+# Generate once for this session; reuse it and the same body for a retry.
+IDEMPOTENCY_KEY=$(python -c 'import uuid; print(uuid.uuid4())')
 SESSION=$(curl -s https://api.myvocal.ai/sound_clone/api/v1/stt/realtime/sessions \
   -H "accessKey: $MYVOCAL_ACCESS_KEY" -H "Content-Type: application/json" \
-  -H "Idempotency-Key: 3a91-rt-1" \
+  -H "Idempotency-Key: $IDEMPOTENCY_KEY" \
   -d '{"languageHint":"en","options":{"inputEncoding":"pcm_s16le_16000"}}')
 ```
 
@@ -32,7 +37,9 @@ rate, or a second of audio is interpreted as the wrong duration.
 ## 3. Connect the socket
 
 A server client sends the `accessKey` header. A browser must not put its long-lived key in a URL: it
-exchanges the key once for a short-lived, single-use ticket and connects with `?ticket=`.
+uses a short-lived, single-use ticket and connects with `?ticket=`. In a customer-facing app, your
+backend keeps the API key and creates the session and ticket; send only the ticket and session
+information to the browser. The supplied browser page is a local developer demo.
 
 <Card title="POST /sound_clone/api/v1/stt/realtime/sessions/{sessionId}/tickets" icon="ticket" href="/api-reference/stt/createTicket">
   Issues a single-use browser ticket bound to the owner and the session.
@@ -45,7 +52,7 @@ Send audio with a MyVocal event envelope and read the results:
   "payload": { "audioBase64": "...", "sampleOffset": 0, "capturedSamples": 16000 } }
 ```
 
-The server answers with `session.ready`, `transcript.delta`, `transcript.final`, `transcript.revision`,
+The server answers with `session.ready`, `transcript.delta`, `transcript.final`, `transcript.alignment`, `transcript.revision`,
 `transcript.entities`, `usage.updated`, `session.notice`, `session.completed` and `session.error`,
 each with an `eventId`, `sessionId` and a monotonic `sequence`.
 
@@ -79,7 +86,7 @@ Server to client, each as `{ "eventId", "sessionId", "sequence", "eventType", "p
 | `transcript.final` | `id`, `text`, `revisedText`, `languageCode`, `languageProbability`, `entities`, `words`, `characterAlignments` |
 | `transcript.revision` | `id`, `text`, `revisedText` (the edited transcript arrived for that line) |
 | `transcript.entities` | `id`, `entities` (detected entities for that line) |
-| `transcript.alignment` | `id`, `languageCode`, `languageProbability`, `words` (late language/alignment) |
+| `transcript.alignment` | `id`, `languageCode`, `languageProbability`, `words`, `characterAlignments` (late language/alignment) |
 | `usage.updated` | `estimatedCharacters`, `billableCharacters`, `elapsedMs`, `sentSamples`, `receivedSamples`, `capturedSamples` (all decimal strings), `accepting`, `epoch`, and `rotate`/`errorCode` when present |
 | `session.notice` | `code`, `message` (for example `PROCESSING_STORAGE_NOT_APPLIED`) |
 | `session.completed` | the terminal session view |
@@ -92,15 +99,22 @@ All 64-bit quantities are decimal strings; `accepting`, `rotate` and `epoch` sta
 - A `usage.updated` with `rotate: true` and `accepting: false` means the server wants a new segment:
   call `session.pause`, then `session.resume` (a new `epoch`), and continue sending from the new
   epoch. `session.ready` reports the live epoch and cursors so a reconnect knows where to resume.
-- A server `session.error` carries a stable MyVocal code (`INPUT_INVALID`, `PROVIDER_UNAVAILABLE`,
+- A server `session.error` carries a MyVocal code (`INPUT_INVALID`, `PROVIDER_UNAVAILABLE`,
   `INSUFFICIENT_CHARACTERS`, `TEMPORARILY_UNAVAILABLE`, …). A plain disconnect is not a successful
-  finish: reconnect and `session.finish` (or `session.resume` first) so the tail is committed.
+  finish. Read the session over REST, then call [finish](/api-reference/stt/finishSession) to settle
+  the audio the server can confirm. The result may be `PARTIAL`; unsent or unconfirmed audio is not
+  restored by reconnecting. Full pause/resume across a service replacement is not yet verified.
 - A repeated frame at the same `sampleOffset`, a repeated `segment.commit` and a repeated
   `session.finish` are idempotent; they neither double-count nor create a second task.
 
+The production socket can disconnect after about 60 seconds without traffic. Server clients can
+send a WebSocket ping every 20 seconds while idle; browser clients should handle disconnects and
+read the session before deciding what to do next. `heartbeatIntervalMs` does not keep the
+client-to-MyVocal connection alive on its own.
+
 ## Complete examples
 
-- Node.js server socket: [`examples/stt/stt_realtime_minimal.mjs`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/stt/stt_realtime_minimal.mjs)
+- Node.js client using a one-use ticket: [`examples/stt/stt_realtime_minimal.mjs`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/stt/stt_realtime_minimal.mjs)
 - Python server socket: [`examples/stt/stt_realtime_minimal.py`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/stt/stt_realtime_minimal.py)
 - Browser microphone with a ticket: [`examples/stt/stt_realtime_browser.html`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/stt/stt_realtime_browser.html)
 

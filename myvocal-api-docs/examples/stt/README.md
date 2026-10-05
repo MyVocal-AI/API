@@ -1,26 +1,46 @@
 # Speech to Text examples
 
-Runnable clients for the MyVocal Speech to Text API. Every example talks only to MyVocal and uses
-environment variables for configuration; none installs or targets a provider SDK.
+These clients call MyVocal with your existing API key. Running them against production performs
+real transcription and consumes Characters. No key is included in this repository.
 
-| File | What it shows |
-|---|---|
-| `stt_batch_minimal.py` | Batch: upload a file, submit, poll and download the result. |
-| `stt_realtime_minimal.py` | Real-time server socket with the `accessKey` header (Python 3.8+, `requests`, `websocket-client`). |
-| `stt_realtime_minimal.mjs` | Real-time server socket with the `accessKey` header (Node 22+, global `fetch`/`WebSocket`, `node:crypto`). |
-| `stt_realtime_browser.html` | Browser microphone capture: exchanges the key for a single-use ticket, declares the real sample rate, flushes the tail and releases the microphone. |
-
-Set the environment before running:
+## Batch (Python, standard library)
 
 ```bash
-export MYVOCAL_API_BASE="https://api.myvocal.ai"   # or http://127.0.0.1:8080 for a local build
-export MYVOCAL_ACCESS_KEY="stt_live_..."
-export MYVOCAL_AUDIO="./sample-16k-mono-s16le.pcm" # batch/real-time server clients
+export MYVOCAL_API_KEY="<your-api-key>"
+# Optional; this variable includes the STT path:
+export MYVOCAL_STT_BASE_URL="https://api.myvocal.ai/sound_clone/api/v1/stt"
+python stt_batch_minimal.py ./meeting.wav en "Meeting"
 ```
 
-Real-time server clients must send the encoding they declared: a PCM16 mono file at 16 kHz uses
-`pcm_s16le_16000`. The browser example reads the microphone's own sample rate and declares the
-matching encoding.
+The example uploads, polls, downloads and **deletes its completed test transcription**.
+A later run starts a new billable task. Interrupted submissions retain a local state file for
+idempotent recovery. Inspect the script before using it with recordings you want to retain.
 
-Read the guides first: [Batch quickstart](/guides/stt-batch-quickstart) and
-[Real-time quickstart](/guides/stt-realtime-quickstart).
+## Real-time (Python or Node.js)
+
+Use raw signed 16-bit little-endian mono PCM at 16 kHz, not a WAV file with a container header.
+
+```bash
+export MYVOCAL_API_BASE="https://api.myvocal.ai"
+export MYVOCAL_ACCESS_KEY="<your-api-key>"
+export MYVOCAL_AUDIO="./sample-16k-mono-s16le.pcm"
+
+# Python 3.8+: server socket authenticated with the accessKey header
+python -m pip install requests websocket-client
+python stt_realtime_minimal.py
+
+# Node.js 22+: native fetch/WebSocket; socket authenticated with a one-use ticket
+node stt_realtime_minimal.mjs
+```
+
+No recognition-service SDK is needed. Each example finishes the session and reads its final state.
+
+## Browser demo
+
+Serve `stt_realtime_browser.html` on localhost or HTTPS, enter the MyVocal API base and your
+own test key, then grant microphone access. The page declares the actual capture rate, obtains a
+single-use socket ticket and releases the microphone on exit. This is a developer demo; in a
+customer-facing application keep the API key on your backend and expose only the session/ticket.
+
+The microphone demo has simulated behavior coverage, not real-device acceptance.
+See https://docs.myvocal.ai/guides/stt-availability for current limitations.

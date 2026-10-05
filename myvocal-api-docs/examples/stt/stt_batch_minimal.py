@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Minimal MyVocal Speech to Text batch client (R1).
+"""Minimal MyVocal Speech to Text batch client.
 
-Runs the complete public R1 flow with no third-party dependencies:
+Runs the complete public flow with no third-party dependencies:
 
     capabilities -> create upload -> PUT part bytes -> complete upload
     -> submit transcription (idempotent) -> poll -> download -> delete
