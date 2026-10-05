@@ -5,6 +5,8 @@
 // On stop it waits for the audio worklet to hand over the tail, sends everything, finishes with the
 // real capturedSamples and shows the server's outcome. If the socket fails it releases the
 // microphone and finishes through the backend instead; it never reports success it did not receive.
+// A session that still could not be finished is kept for a retry under its own session id, so a
+// later recording neither overwrites nor clears it.
 
 const SUPPORTED_RATES = [8000, 16000, 22050, 24000, 44100, 48000];
 const TERMINAL = new Set(['COMPLETED', 'PARTIAL', 'FAILED']);
@@ -288,8 +290,9 @@ function showOutcome(current, view) {
   (view.notices || []).forEach((notice) => { if (!current.notices.includes(notice.code)) current.notices.push(notice.code); });
   setStatus(TERMINAL.has(status) ? 'Session ' + status : 'Session status: ' + (status || 'unknown'));
   renderDetails();
-  localStorage.removeItem(RECOVERY_KEY);
+  forgetUnfinished(current.sessionId);
   ui.start.disabled = false;
+  refreshRecovery();
 }
 
 /** Any failure: release the microphone, then settle the session through the backend. */
@@ -304,20 +307,21 @@ function fail(current, code) {
   if (!current.sessionId) {
     setStatus('Could not start: ' + code);
     ui.start.disabled = false;
+    refreshRecovery();
     return;
   }
-  closeOut({ sessionId: current.sessionId, capturedSamples: String(current.captured), reason: code });
+  closeOut(current, { sessionId: current.sessionId, capturedSamples: String(current.captured), reason: code });
 }
 
 /** Bounded, idempotent finish through the backend; a repeated finish returns the same task. */
-async function closeOut(unfinished) {
+async function closeOut(current, unfinished) {
   setStatus(`Stopped (${unfinished.reason}). Finishing session through the backend…`);
   const path = '/api/sessions/' + encodeURIComponent(unfinished.sessionId);
   let lastError = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const view = await api('POST', path + '/finish', { capturedSamples: unfinished.capturedSamples });
-      return showOutcome(run, view);
+      return showOutcome(current, view);
     } catch (error) {
       lastError = error;
       if (error.retryable === false) break;
@@ -326,28 +330,55 @@ async function closeOut(unfinished) {
   }
   try {
     const view = await api('GET', path);
-    if (TERMINAL.has(view.status)) return showOutcome(run, view);
+    if (TERMINAL.has(view.status)) return showOutcome(current, view);
   } catch (ignored) {
     // reported below
   }
-  localStorage.setItem(RECOVERY_KEY, JSON.stringify({ ...unfinished, savedAt: new Date().toISOString() }));
-  showRecovery(unfinished, lastError ? lastError.message : 'UNKNOWN');
-}
-
-function showRecovery(unfinished, code) {
+  rememberUnfinished({ sessionId: unfinished.sessionId, capturedSamples: unfinished.capturedSamples,
+    code: lastError ? lastError.message : 'UNKNOWN', savedAt: new Date().toISOString() });
   setStatus('Not finished yet');
-  ui.recoveryText.textContent = `Session ${unfinished.sessionId} has not been finished (${code}). Its audio is not `
-    + 'reported as complete. Retry when the network is back; finishing again never charges twice.';
-  ui.recovery.hidden = false;
   ui.start.disabled = false;
+  refreshRecovery();
 }
 
-function savedSession() {
+/** Unfinished sessions, oldest first. A page from before per-session records kept a single one. */
+function unfinishedSessions() {
   try {
-    return JSON.parse(localStorage.getItem(RECOVERY_KEY) || 'null');
+    const saved = JSON.parse(localStorage.getItem(RECOVERY_KEY) || 'null');
+    if (Array.isArray(saved)) return saved.filter((entry) => entry && typeof entry.sessionId === 'string');
+    return saved && typeof saved.sessionId === 'string' ? [saved] : [];
   } catch {
-    return null;
+    return [];
   }
+}
+
+function rememberUnfinished(entry) {
+  const pending = unfinishedSessions();
+  const index = pending.findIndex((saved) => saved.sessionId === entry.sessionId);
+  if (index >= 0) pending[index] = entry; else pending.push(entry);
+  localStorage.setItem(RECOVERY_KEY, JSON.stringify(pending));
+}
+
+function forgetUnfinished(sessionId) {
+  const pending = unfinishedSessions();
+  const rest = pending.filter((saved) => saved.sessionId !== sessionId);
+  if (rest.length === pending.length) return;
+  if (rest.length) localStorage.setItem(RECOVERY_KEY, JSON.stringify(rest));
+  else localStorage.removeItem(RECOVERY_KEY);
+}
+
+/** Shows the oldest unfinished session, if any; recording stays available alongside it. */
+function refreshRecovery(code) {
+  const pending = unfinishedSessions();
+  if (!pending.length) {
+    ui.recovery.hidden = true;
+    return;
+  }
+  const next = pending[0];
+  ui.recoveryText.textContent = `Session ${next.sessionId} has not been finished (${code || next.code || 'UNKNOWN'}).`
+    + (pending.length > 1 ? ` ${pending.length - 1} more unfinished session(s) after it.` : '')
+    + ' Its audio is not reported as complete. Retry when the network is back; finishing again never charges twice.';
+  ui.recovery.hidden = false;
 }
 
 function recoveryRun(saved) {
@@ -358,16 +389,17 @@ function recoveryRun(saved) {
 ui.start.addEventListener('click', start);
 ui.stop.addEventListener('click', stop);
 ui.retry.addEventListener('click', () => {
-  const saved = savedSession();
+  const [saved] = unfinishedSessions();
   if (!saved) return;
   ui.recovery.hidden = true;
   ui.start.disabled = true;
   run = recoveryRun(saved);
-  closeOut({ ...saved, reason: 'RETRY' });
+  closeOut(run, { ...saved, reason: 'RETRY' });
 });
 
-const pendingCloseOut = savedSession();
-if (pendingCloseOut) {
-  run = recoveryRun(pendingCloseOut);
-  showRecovery(pendingCloseOut, 'PAGE_RELOADED');
+const [firstUnfinished] = unfinishedSessions();
+if (firstUnfinished) {
+  run = recoveryRun(firstUnfinished);
+  setStatus('Not finished yet');
+  refreshRecovery('PAGE_RELOADED');
 }

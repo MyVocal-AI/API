@@ -13,8 +13,9 @@ written to a log:
 The script streams the raw file the way a live source would: 100 ms frames, each
 sent when its audio would have been captured. Sends are blocking, so a slow
 network holds the sender back instead of growing a local queue; a separate reader
-thread consumes the server's events. It follows a rotation request, finishes,
-waits (bounded) for the terminal event, prints the shared History view and saves
+thread consumes the server's events. It follows a rotation request (also one on
+the last frame), finishes once the server has acknowledged every sample, waits
+(bounded) for the terminal event, prints the shared History view and saves
 it as JSON. If the socket fails it finishes over REST instead; the result may be
 PARTIAL. Every byte goes to the MyVocal entry point.
 """
@@ -38,6 +39,7 @@ HEADERS = {"accessKey": KEY, "Content-Type": "application/json"}
 RATE = 16_000
 FRAME_SAMPLES = RATE // 10  # 100 ms
 COMPLETE_TIMEOUT_S = 60
+ACK_TIMEOUT_S = 10  # no acknowledgement progress for this long: stop and finish over REST
 
 
 def envelope(response):
@@ -138,18 +140,28 @@ def main():
                                          header=["accessKey: " + KEY], timeout=30)
     stream = Stream(socket)
     captured = 0
+    exit_code = 0
     begin = time.monotonic()
+    progress_at, progress_mark = time.monotonic(), -1
     try:
+        # Finish only when the server has stored every sample of the file. Reaching the end of the
+        # file is not enough: the last frames may still be unacknowledged, or answered with a
+        # rotation, in which case they were not stored and are sent again in the next epoch.
         while True:
             with stream.lock:
                 if stream.failure:
                     raise RuntimeError(stream.failure)
-                if stream.rotating:
+                position = stream.epoch_start + stream.sent
+                confirmed = stream.epoch_start + stream.acked
+                if confirmed >= total and not stream.rotating:
+                    break
+                if confirmed != progress_mark:
+                    progress_at, progress_mark = time.monotonic(), confirmed
+                if stream.rotating or position >= total:
+                    if time.monotonic() - progress_at > ACK_TIMEOUT_S:
+                        raise RuntimeError("NO_ACKNOWLEDGEMENT")
                     stream.lock.wait(0.05)
                     continue
-                position = stream.epoch_start + stream.sent
-                if position >= total:
-                    break
                 end = min(total, position + FRAME_SAMPLES)
                 due = begin + end / RATE - time.monotonic()
                 if due > 0:
@@ -167,6 +179,7 @@ def main():
             with stream.lock:
                 if stream.epoch == epoch and stream.sent == offset:
                     stream.sent += end - position
+                progress_at = time.monotonic()
         with stream.lock:
             stream.send("session.finish", {"capturedSamples": str(total)})
             deadline = time.monotonic() + COMPLETE_TIMEOUT_S
@@ -184,6 +197,7 @@ def main():
         view = envelope(requests.post(BASE + REALTIME + "/sessions/" + session_id + "/finish",
                                       headers=HEADERS, json={"capturedSamples": str(captured)}, timeout=70))
         print("status", view["status"])
+        exit_code = 1
     finally:
         socket.close()
 
@@ -193,10 +207,11 @@ def main():
     with open("stt_realtime_result.json", "w", encoding="utf-8") as out:
         json.dump(view, out, ensure_ascii=False, indent=2)
     print("wrote stt_realtime_result.json")
+    return exit_code
 
 
 if __name__ == "__main__":
     try:
-        main()
+        sys.exit(main())
     except KeyError as missing:
         sys.exit("set environment variable " + str(missing))

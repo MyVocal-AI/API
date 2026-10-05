@@ -40,9 +40,12 @@ Both send the file the way a live source would: 100 ms frames, each leaving when
 have been captured, so a 60-second file takes about 60 seconds. Node waits while more than 256 KB is
 still in the socket's send buffer; Python's blocking send holds the loop back the same way while a
 reader thread handles the server's events. Both follow a rotation request (`session.pause` then
-`session.resume`, re-sending unacknowledged audio from the new epoch), finish, wait at most 60 s for
-`session.completed` and read the session. If the socket fails they finish over REST instead and
-print the real status, which may be `PARTIAL`. No recognition-service SDK is needed.
+`session.resume`, re-sending unacknowledged audio from the new epoch), including one that answers
+the last frame of the file. They send `session.finish` only once the server has acknowledged every
+sample and no rotation is pending, then wait at most 60 s for `session.completed` and read the
+session. If no acknowledgement arrives for 10 s, or the socket fails, they finish over REST instead,
+print the real status (which may be `PARTIAL`) and exit with a nonzero code. No recognition-service
+SDK is needed.
 
 ## Browser (same-origin backend + page)
 
@@ -77,6 +80,10 @@ On Windows PowerShell use `$env:MYVOCAL_ACCESS_KEY = "<your-api-key>"` instead o
   only the status MyVocal returns (`COMPLETED`, `PARTIAL` or `FAILED`). If the backend cannot be
   reached, the session id and captured samples are kept in `localStorage` with a retry button; the
   page never reports a finish it did not receive.
+- Each unfinished session is kept under its own session id. Start stays available; a later session
+  that completes or fails does not overwrite or clear an earlier one. After a reload the oldest
+  unfinished session is offered first, and each retry clears only the record of the session it
+  finished.
 
 For your own product, move `server.mjs`'s four routes into your backend behind your own user
 authentication. The browser example has been run in an isolated browser with a simulated

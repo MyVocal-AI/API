@@ -12,7 +12,8 @@
  *
  * The client streams the raw PCM16 mono file the way a live source would: 100 ms frames, each sent
  * when its audio would have been captured, and never more than a bounded amount waiting in the
- * socket's send buffer. It follows a rotation request, finishes, waits (bounded) for the terminal
+ * socket's send buffer. It follows a rotation request (also one on the last frame), finishes once the
+ * server has acknowledged every sample, waits (bounded) for the terminal
  * event and reads the session. If the socket fails, it finishes over REST instead; the result may be
  * PARTIAL. It talks only to MyVocal; no provider SDK is required.
  */
@@ -27,6 +28,7 @@ const RATE = 16_000;
 const FRAME_SAMPLES = RATE / 10;            // 100 ms
 const MAX_BUFFERED_BYTES = 256 * 1024;      // pause sending while this much is still unsent locally
 const COMPLETE_TIMEOUT_MS = 60_000;
+const ACK_TIMEOUT_MS = 10_000;              // no acknowledgement progress for this long: stop and finish over REST
 if (!BASE || !KEY || !AUDIO) {
   console.error('set MYVOCAL_API_BASE, MYVOCAL_ACCESS_KEY and MYVOCAL_AUDIO');
   process.exit(2);
@@ -100,15 +102,31 @@ async function main() {
 
   const started = Date.now();
   let captured = 0;
+  let progressAt = Date.now();
+  let progressMark = -1;
   try {
-    while (state.epochStart + state.sent < total) {
+    // Finish only when the server has stored every sample of the file. Reaching the end of the file
+    // is not enough: the last frames may still be unacknowledged, or answered with a rotation, in
+    // which case they were not stored and are sent again in the next epoch.
+    for (;;) {
       if (state.failure) throw new Error(state.failure);
       const position = state.epochStart + state.sent;
+      const confirmed = state.epochStart + state.acked;
+      if (confirmed >= total && !state.rotating) break;
+      if (confirmed !== progressMark) {
+        progressMark = confirmed;
+        progressAt = Date.now();
+      }
+      if (state.rotating || position >= total || socket.bufferedAmount > MAX_BUFFERED_BYTES) {
+        if (Date.now() - progressAt > ACK_TIMEOUT_MS) throw new Error('NO_ACKNOWLEDGEMENT');
+        await sleep(20);
+        continue;
+      }
       const end = Math.min(total, position + FRAME_SAMPLES);
       // Real-time pace: a frame leaves once its last sample would have been captured.
       const due = started + (end * 1000) / RATE - Date.now();
-      if (state.rotating || socket.bufferedAmount > MAX_BUFFERED_BYTES || due > 0) {
-        await sleep(state.rotating || socket.bufferedAmount > MAX_BUFFERED_BYTES ? 20 : Math.min(due, 100));
+      if (due > 0) {
+        await sleep(Math.min(due, 100));
         continue;
       }
       captured = Math.max(captured, end);
@@ -118,6 +136,7 @@ async function main() {
         capturedSamples: String(captured),
       } }));
       state.sent += end - position;
+      progressAt = Date.now();
     }
     socket.send(JSON.stringify({ eventType: 'session.finish', epoch: state.epoch, payload: { capturedSamples: String(total) } }));
     const deadline = Date.now() + COMPLETE_TIMEOUT_MS;
