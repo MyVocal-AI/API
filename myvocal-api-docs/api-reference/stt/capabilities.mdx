@@ -36,8 +36,12 @@ JSON downloads are the documented exception and return the transcript view direc
     </ResponseField>
 
     <ResponseField name="requestParameters" type="object">
-      The accepted Batch option fields and their constraints. `options.processingContentStorage` notes
-      that account eligibility is not verified.
+      The accepted Batch submit surface and its constraints: the `uploadId` / `mediaUrl` choice (exactly
+      one), `audioTrackIndex`, `languageHint`, `waitForCompletion` / `waitTimeoutMs`, every `options`
+      field including `exportFormats` (pre-generation only), each `exportOptions[]` control,
+      `notifyUrl` / `notifyOnCompletion` and `clientMetadata`. `options.processingContentStorage`
+      notes that account eligibility is not verified; `options.matchKnownSpeakers` is listed as not
+      available.
     </ResponseField>
 
     <ResponseField name="realtimeParameters" type="object">

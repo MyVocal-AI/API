@@ -27,7 +27,9 @@ reserves Characters and starts the asynchronous task in a single request.
 <ParamField body="mediaUrl" type="string">
   A public `http`/`https` URL. The server fetches it over a real connection and re-checks every
   redirect; private, loopback, link-local and cloud-metadata addresses are refused. There is no domain
-  or port allowlist.
+  or port allowlist. A failure reports `details.reason` (`DESTINATION_NOT_ALLOWED`, `SOURCE_REFUSED`,
+  `SOURCE_UNAVAILABLE`, `SOURCE_UNREACHABLE`, `TOO_MANY_REDIRECTS` or `UNSUPPORTED_TYPE`) and, when the
+  host answered, `details.sourceStatus`; see [public media URLs](/guides/stt-batch-quickstart#public-media-urls).
 </ParamField>
 
 <ParamField body="audioTrackIndex" type="number">
@@ -36,7 +38,8 @@ reserves Characters and starts the asynchronous task in a single request.
 </ParamField>
 
 <ParamField body="languageHint" type="string">
-  The spoken language, or omit for automatic detection.
+  The spoken language, or omit for automatic detection. The hint is echoed as `languageHint`; it is
+  never reported as the detected language.
 </ParamField>
 
 <ParamField body="title" type="string">
@@ -93,9 +96,9 @@ All fields below belong inside `options`. Omit fields you do not need.
 | `identifyConversationRoles` | Boolean; requires speaker separation |
 | `vocabularyHints` | Array, at most 1000 strings, each at most 128 characters |
 | `processingContentStorage` | Boolean; see [storage limitations](/guides/stt-availability#speaker-matching-and-storage-requests) |
-| `exportFormats` | Array of supported [download formats](/api-reference/stt/downloadTranscription) |
+| `exportFormats` | Array of supported [download formats](/api-reference/stt/downloadTranscription) to pre-generate at completion; every format stays downloadable |
 | `exportOptions` | Array of per-format objects, described below |
-| `notifyOnCompletion` | Boolean; enables completed-task notification |
+| `notifyOnCompletion` | Boolean; a notification is sent when `notifyUrl` is present unless this is `false`; `true` requires `notifyUrl` |
 | `notifyUrl` | Public HTTP(S) URL |
 | `clientMetadata` | Object, at most two levels and 16 KB |
 | `notificationSigningSecret` | Write-only signing secret; see [notifications](/guides/stt-batch-quickstart#completion-notifications) |
@@ -114,18 +117,20 @@ Each `exportOptions` entry has a required `format` and optional controls:
 
 | Field | Type / limit |
 |---|---|
-| `includeSpeakers`, `includeTimestamps` | Boolean |
+| `includeSpeakers`, `includeTimestamps` | Boolean, default `true` (the `txt` segment header shows both) |
 | `segmentOnSilenceLongerThanS`, `maxSegmentDurationS` | Number greater than 0 and at most 3600 seconds |
-| `maxSegmentChars` | Integer, 1–100000 |
-| `maxCharactersPerLine` | Integer, 1–16384 |
+| `maxSegmentChars` | Integer, 1–100000; counts the separators inserted when a segment is rebuilt |
+| `maxCharactersPerLine` | Integer, 1–16384; wraps at word boundaries (`srt`, `txt`) |
 
-Only relevant formats use each control; `json` is the public transcription view. Without alignment,
-SRT cannot produce timed cues. These options do not change recognition or billing.
+Only relevant formats use each control; `json` is the public transcription view. An entry applies to
+the pre-generated file and to later downloads of that format. Without timestamps (for example
+`alignmentLevel: none`) SRT has no timed cues and is empty. These options do not change recognition
+or billing.
 
-<Warning>
-Some invalid entity categories currently fail asynchronously as `MEDIA_UNREADABLE` even for valid
-audio. See [known limitations](/guides/stt-availability#known-parameter-error-issue) before retrying.
-</Warning>
+<Note>
+An entity category the model rejects is detected when the task runs: the task ends `FAILED` with
+`INPUT_INVALID`. See [parameter errors found by the model](/guides/stt-availability#parameter-errors-found-by-the-model).
+</Note>
 
 ### Response
 
