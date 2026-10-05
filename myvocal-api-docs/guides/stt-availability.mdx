@@ -23,12 +23,13 @@ This page describes the release verified on October 5, 2026.
 Read [capabilities](/api-reference/stt/capabilities) for account access, rates and current option
 constraints. An available mode does not mean every optional feature or option combination is supported.
 
-## Known parameter error issue
+## Parameter errors found by the model
 
-Some invalid `options.entityCategories` values currently result in an asynchronous `FAILED` task
-with `error.errorCode = MEDIA_UNREADABLE`, instead of `INPUT_INVALID`. This can happen even when
-the audio is valid. Review the requested categories before replacing the file or submitting again.
-The failed transcription's reservation is released; check `billing` for the actual amounts.
+An `options.entityCategories` value that the model rejects is only detected when the task runs, so
+it ends as an asynchronous `FAILED` task with `error.errorCode = INPUT_INVALID` (earlier releases
+reported `MEDIA_UNREADABLE`). The audio is not at fault: review the requested categories instead of
+replacing the file. The failed transcription's reservation is released; check `billing` for the
+actual amounts.
 
 Do not retry an invalid parameter unchanged. A corrected request is a new logical task and needs
 a new `Idempotency-Key`. General schema errors and unsupported option combinations are still
@@ -65,5 +66,6 @@ retention effect have not been verified. Acceptance of the request, or absence o
 
 Production real-time calls have been verified for PCM at 8, 16 and 48 kHz and μ-law at 8 kHz.
 PCM at 22.05, 24 and 44.1 kHz is implemented and locally tested, but has not yet been verified
-in production. The browser demo has behavior tests; real-microphone/device acceptance remains
-unverified. Always declare the actual sample rate and test your capture device.
+in production. The browser example (a same-origin backend plus page) has been run in an isolated
+browser with a simulated microphone; real-microphone/device acceptance remains unverified. Always
+declare the actual sample rate and test your capture device.

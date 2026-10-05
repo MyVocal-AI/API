@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MyVocal real-time Speech to Text — browser example</title>
+  <style>
+    body { font: 15px/1.5 system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    button { font: inherit; padding: .4rem 1rem; margin-right: .5rem; }
+    #partial { color: #777; min-height: 1.5em; }
+    #lines p { margin: .25rem 0; }
+    #status { font-weight: 600; }
+    #details { color: #555; font-size: 13px; white-space: pre-wrap; }
+    #recovery { border: 1px solid #c90; padding: .5rem 1rem; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Real-time Speech to Text</h1>
+  <p>
+    The API key stays in <code>server.mjs</code>. This page asks that backend for a session and a
+    single-use ticket, then streams the microphone straight to MyVocal.
+  </p>
+  <p>
+    <button id="start" type="button">Start</button>
+    <button id="stop" type="button" disabled>Stop</button>
+  </p>
+  <p id="status">Idle</p>
+  <div id="lines"></div>
+  <p id="partial"></p>
+  <div id="details"></div>
+  <div id="recovery" hidden>
+    <p id="recoveryText"></p>
+    <button id="retry" type="button">Retry finishing this session</button>
+  </div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

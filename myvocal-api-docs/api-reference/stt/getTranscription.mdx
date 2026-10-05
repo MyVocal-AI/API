@@ -46,7 +46,9 @@ JSON downloads are the documented exception and return the transcript view direc
     </ResponseField>
 
     <ResponseField name="detectedLanguage" type="string">
-      The detected language, when the model returned one.
+      The detected language, only when the model returned one; otherwise `null`. It is never copied
+      from `languageHint`. Batch results use three-letter codes (for example `eng`); real-time lines
+      use two-letter codes (for example `en`).
     </ResponseField>
 
     <ResponseField name="audioDurationMs" type="string">
@@ -58,7 +60,11 @@ JSON downloads are the documented exception and return the transcript view direc
       `text`, `languageCode`, `languageConfidence`, `speakers`, `segments` and `channelResults`. Each
       segment carries `id`, `speakerId`, `channelIndex`, `startMs`, `endMs`, `text`, `timingStatus`,
       `tokens` and `characterAlignments`. Entities, the edited text and the per-channel results are
-      MyVocal fields; a provider value is never exposed raw.
+      MyVocal fields; a provider value is never exposed raw. `revisionStatus` is `NOT_REQUESTED`,
+      `APPLIED` (edited text in `revisedText`), `EMPTY` or `FAILED` (with `revisionErrorCode`; a
+      real-time edit that did not arrive before the session closed is `REVISION_NOT_RECEIVED`). In a
+      `combined` channel result, a channel's `languageCode` is `null` unless the model returned a
+      language for that channel.
     </ResponseField>
 
     See [known limitations](/guides/stt-availability) for current parameter-error classification and

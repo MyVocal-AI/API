@@ -20,7 +20,9 @@ task is in flight:
 * after a successful run the task is deleted and the state file is removed, so the next run starts a
   new task;
 * a terminal ``FAILED`` task is reported and its state file is removed; it is never silently retried
-  as a new recognition.
+  as a new recognition;
+* ``PARTIAL`` is also terminal: the readable text and status are printed from the task view (download
+  is only offered for ``COMPLETED``), the task stays in History and the state file is removed.
 
 Environment:
     MYVOCAL_API_KEY       required; the existing MyVocal API key
@@ -160,14 +162,21 @@ def submit(upload_id, track_index, language_hint, title, idempotency_key):
     return call("POST", "/transcriptions", body, idempotency_key=idempotency_key)
 
 
+# PARTIAL is terminal too: it only occurs for a real-time task that ended with some audio unconfirmed,
+# but a resumed id or a History listing can return one, and it never turns into COMPLETED later.
+TERMINAL = ("COMPLETED", "PARTIAL", "FAILED")
+
+
 def poll(transcription_id, timeout_seconds=900):
+    """Polls while the task is still running; returns as soon as it reaches a terminal status."""
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
         view = call("GET", "/transcriptions/%s" % transcription_id)
-        if view["status"] in ("COMPLETED", "FAILED"):
+        if view["status"] in TERMINAL:
             return view
         time.sleep(3)
-    raise RuntimeError("transcription did not finish within %ds" % timeout_seconds)
+    raise RuntimeError("transcription %s is still running after %ds; run again to resume"
+                       % (transcription_id, timeout_seconds))
 
 
 def download_text(transcription_id):
@@ -222,10 +231,19 @@ def main():
         clear_state(source_path)
         return 1
 
-    print("detected language:", view["detectedLanguage"])
-    print("text:", view["transcript"]["text"])
-    print("billed characters:", view["billing"]["billableCharacters"],
-          "over", view["billing"]["billableDurationMs"], "ms")
+    transcript = view.get("transcript") or {}
+    billing = view.get("billing") or {}
+    print("detected language:", view.get("detectedLanguage"))
+    print("text:", transcript.get("text"))
+    print("billed characters:", billing.get("billableCharacters"),
+          "over", billing.get("billableDurationMs"), "ms")
+    if view["status"] == "PARTIAL":
+        # The text above is what was confirmed; the rest of the audio was not recognised. Download
+        # is only offered for COMPLETED, so read the result from this view and keep the task in
+        # History instead of deleting it.
+        print("partial result: only the confirmed part of the audio is in the text above")
+        clear_state(source_path)
+        return 1
 
     listed = call("GET", "/transcriptions?page=1&pageSize=20")
     print("history total:", listed["total"])

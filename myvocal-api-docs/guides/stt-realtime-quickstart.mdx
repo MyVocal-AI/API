@@ -34,12 +34,22 @@ SESSION=$(curl -s https://api.myvocal.ai/sound_clone/api/v1/stt/realtime/session
 at 16 kHz; `mulaw_8000` is one μ-law byte per sample. Always declare the microphone's real sample
 rate, or a second of audio is interpreted as the wrong duration.
 
+Send audio as it is captured, in frames of about **100 ms**. Any frame size is accepted (there is no
+minimum frame length or frame rate), but each message has a fixed overhead, so merge very small
+pieces such as a browser's 128-sample `AudioWorklet` quanta. When you stream a file, pace frames by
+sample time (one second of audio per second) and keep the socket's local send buffer bounded instead
+of writing the whole file at once. `capturedSamples` counts everything captured so far, including
+audio not sent yet; `sampleOffset` counts the samples already sent in the current epoch.
+
 ## 3. Connect the socket
 
 A server client sends the `accessKey` header. A browser must not put its long-lived key in a URL: it
 uses a short-lived, single-use ticket and connects with `?ticket=`. In a customer-facing app, your
 backend keeps the API key and creates the session and ticket; send only the ticket and session
-information to the browser. The supplied browser page is a local developer demo.
+information to the browser. The browser then connects straight to MyVocal's socket, so your backend
+needs no CORS opening and no general proxy: only fixed routes to create a session, issue a ticket,
+read a session and finish it, for sessions it created. The
+[browser example](#complete-examples) is a runnable version of that pattern.
 
 <Card title="POST /sound_clone/api/v1/stt/realtime/sessions/{sessionId}/tickets" icon="ticket" href="/api-reference/stt/createTicket">
   Issues a single-use browser ticket bound to the owner and the session.
@@ -60,7 +70,11 @@ each with an `eventId`, `sessionId` and a monotonic `sequence`.
 
 - `segment.commit` submits the audio so far and **keeps** the session recording.
 - `session.pause` / `session.resume` close and reopen a recording segment (a new epoch).
-- `session.finish` flushes the tail, settles once and completes the task.
+- `session.finish` flushes the tail, settles once and completes the task. `session.completed`
+  arrives once the last final line and the supplements you requested are in, or at the cutoff of
+  about 8 seconds after the last final line; a supplement still missing then is reported with a
+  `SUPPLEMENT_NOT_RECEIVED` notice rather than waited for. See
+  [Finish a session](/api-reference/stt/finishSession).
 
 <Card title="POST /sound_clone/api/v1/stt/realtime/sessions/{sessionId}/finish" icon="flag-checkered" href="/api-reference/stt/finishSession">
   The terminal call; a repeated finish returns the same task and never charges twice.
@@ -88,17 +102,23 @@ Server to client, each as `{ "eventId", "sessionId", "sequence", "eventType", "p
 | `transcript.entities` | `id`, `entities` (detected entities for that line) |
 | `transcript.alignment` | `id`, `languageCode`, `languageProbability`, `words`, `characterAlignments` (late language/alignment) |
 | `usage.updated` | `estimatedCharacters`, `billableCharacters`, `elapsedMs`, `sentSamples`, `receivedSamples`, `capturedSamples` (all decimal strings), `accepting`, `epoch`, and `rotate`/`errorCode` when present |
-| `session.notice` | `code`, `message` (for example `PROCESSING_STORAGE_NOT_APPLIED`) |
+| `session.notice` | `code`, `message`; for example `PROCESSING_STORAGE_NOT_APPLIED`, or `SUPPLEMENT_NOT_RECEIVED` with `supplements` (`alignment`, `entities`, `revision`) and `lineIds` |
 | `session.completed` | the terminal session view |
 | `session.error` | `errorCode` (a MyVocal code) |
 
 All 64-bit quantities are decimal strings; `accepting`, `rotate` and `epoch` stay boolean/number.
+Each line's `languageCode` (two-letter, for example `en`) and `languageProbability` are that line's
+detection result when the model returned one; `languageHint` from the session is a request, not a
+detection. A frame that is not valid JSON, an unknown `eventType`, invalid base64 or a malformed
+`capturedSamples` is answered with `session.error` `INPUT_INVALID` and does not change the session.
 
 ## 6. Rotation, recovery and errors
 
 - A `usage.updated` with `rotate: true` and `accepting: false` means the server wants a new segment:
   call `session.pause`, then `session.resume` (a new `epoch`), and continue sending from the new
-  epoch. `session.ready` reports the live epoch and cursors so a reconnect knows where to resume.
+  epoch. The frame that received `rotate: true` was **not** stored: re-send every frame after the
+  last acknowledged `sentSamples`, starting again at `sampleOffset` 0 in the new epoch.
+  `session.ready` reports the live epoch and cursors so a reconnect knows where to resume.
 - A server `session.error` carries a MyVocal code (`INPUT_INVALID`, `PROVIDER_UNAVAILABLE`,
   `INSUFFICIENT_CHARACTERS`, `TEMPORARILY_UNAVAILABLE`, …). A plain disconnect is not a successful
   finish. Read the session over REST, then call [finish](/api-reference/stt/finishSession) to settle
@@ -114,8 +134,10 @@ client-to-MyVocal connection alive on its own.
 
 ## Complete examples
 
-- Node.js client using a one-use ticket: [`examples/stt/stt_realtime_minimal.mjs`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/stt/stt_realtime_minimal.mjs)
-- Python server socket: [`examples/stt/stt_realtime_minimal.py`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/stt/stt_realtime_minimal.py)
-- Browser microphone with a ticket: [`examples/stt/stt_realtime_browser.html`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/stt/stt_realtime_browser.html)
+- Node.js client using a one-use ticket, paced by sample time: [`examples/stt/stt_realtime_minimal.mjs`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/stt/stt_realtime_minimal.mjs)
+- Python server socket, paced by sample time: [`examples/stt/stt_realtime_minimal.py`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/stt/stt_realtime_minimal.py)
+- Browser microphone: a same-origin Node.js backend that keeps the key plus the page, ~100 ms
+  `AudioWorklet` frames, bounded stop/finish and close-out: [`examples/stt/browser/`](https://github.com/MyVocal-AI/API/tree/main/myvocal-api-docs/examples/stt/browser)
+  (`node server.mjs`, see the [examples README](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/stt/README.md))
 
 Read [Characters and quotes](/guides/characters-and-quotes) for the billing rule.

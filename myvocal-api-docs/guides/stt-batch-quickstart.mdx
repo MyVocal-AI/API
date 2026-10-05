@@ -87,8 +87,32 @@ curl https://api.myvocal.ai/sound_clone/api/v1/stt/transcriptions \
 </Card>
 
 <Card title="GET /sound_clone/api/v1/stt/transcriptions/{transcriptionId}/download" icon="download" href="/api-reference/stt/downloadTranscription">
-  `txt`, `json`, `srt`, `segmented_json`, `html`, `docx` or `pdf`.
+  `txt` (the default when `format` is omitted), `json`, `srt`, `segmented_json`, `html`, `docx` or `pdf`.
 </Card>
+
+Download is offered for `COMPLETED` tasks only; any other status returns `RESULT_NOT_READY`. A
+`PARTIAL` task (a real-time session that ended with some audio unconfirmed) is terminal and never
+becomes `COMPLETED`: read its confirmed text from the task view instead of downloading.
+
+## Reading the result
+
+- **Language.** `languageHint` echoes what you asked for (`auto` when omitted); it is not a detection
+  result. `detectedLanguage` and `transcript.languageCode` are filled only when the model returned a
+  language, and use the model's three-letter code (for example `eng`); they are `null` otherwise.
+  Real-time lines use two-letter codes (for example `en`). Compare languages with that difference in
+  mind.
+- **Edited transcript.** With `rewriteInstruction`, `transcript.revisionStatus` is `APPLIED` (the
+  edited text is in `transcript.revisedText`), `EMPTY` (the model returned no edited text), `FAILED`
+  (with a MyVocal `revisionErrorCode`) or `NOT_REQUESTED`. The original `text`, the segments and the
+  entity offsets always refer to the original transcript.
+- **Plain text.** `txt` puts a header line above each segment with its time range (when the segment
+  is timed) and its speaker label, then the text, with a blank line between segments. Turn either
+  part off with `exportOptions` (`includeTimestamps: false`, `includeSpeakers: false`).
+- **Subtitles.** SRT needs timing: segments without timestamps (for example with
+  `alignmentLevel: none`) produce no cues, so an untimed result gives an empty SRT. Line wrapping
+  with `maxCharactersPerLine` breaks at word boundaries; text without spaces, or a single word longer
+  than the limit, is split between whole characters, so no text is lost and no character is cut. `maxSegmentChars` counts the separators MyVocal inserts when it rebuilds a
+  segment.
 
 ## Options and export controls
 
@@ -118,10 +142,31 @@ curl https://api.myvocal.ai/sound_clone/api/v1/stt/transcriptions \
 ```
 
 Read the [Batch option reference](/api-reference/stt/createTranscription#batch-options) and the
-live constraints in [capabilities](/api-reference/stt/capabilities). `exportFormats` selects the artefacts; each `exportOptions` entry applies nested
-controls to one format and does not change another. An unsupported combination is refused at submit
-with `INPUT_INVALID` rather than silently ignored. Some invalid entity category values currently
-fail asynchronously as `MEDIA_UNREADABLE`; see [the known issue](/guides/stt-availability).
+live constraints in [capabilities](/api-reference/stt/capabilities). `exportFormats` only
+**pre-generates** those formats when the task completes; every format in `downloadFormats` stays
+downloadable either way. Each `exportOptions` entry applies its controls to one format, both to the
+pre-generated file and to later downloads of that format, and does not change another format. An
+unsupported combination is refused at submit with `INPUT_INVALID` rather than silently ignored. An
+entity category the model rejects ends the task as `FAILED` with `INPUT_INVALID` (not
+`MEDIA_UNREADABLE`); MyVocal does not keep its own category allowlist.
+
+### Public media URLs
+
+With `mediaUrl`, MyVocal downloads the file itself, identifying as
+`MyVocal-STT-MediaFetcher/1.0 (+https://docs.myvocal.ai)`, and re-checks the public address of the
+real connection and of every redirect (at most 5). A failure carries `details.field = "mediaUrl"`, a
+`details.reason` and, when the host answered, `details.sourceStatus`:
+
+| `errorCode` | `details.reason` | Meaning |
+|---|---|---|
+| `INPUT_INVALID` | `DESTINATION_NOT_ALLOWED` | A private, loopback, link-local or metadata address; permanent |
+| `INPUT_INVALID` | `SOURCE_REFUSED` | The host answered but would not serve the file (for example 401/403/404) |
+| `INPUT_INVALID` | `TOO_MANY_REDIRECTS` | More than 5 redirects |
+| `INPUT_INVALID` | `UNSUPPORTED_TYPE` | The response is not a media type MyVocal accepts |
+| `TEMPORARILY_UNAVAILABLE` | `SOURCE_UNAVAILABLE` | The host returned 408, 429 or 5xx; retry later |
+| `TEMPORARILY_UNAVAILABLE` | `SOURCE_UNREACHABLE` | Name resolution or the connection failed; retry later |
+
+`MEDIA_UNREADABLE` means the file was downloaded but is not readable audio.
 
 ## Completion notifications
 
@@ -145,6 +190,9 @@ and verify your receiver before relying on notifications.
 }
 ```
 
+- A notification is sent when `notifyUrl` is present, unless `notifyOnCompletion` is `false`.
+  `notifyOnCompletion: true` without `notifyUrl` is refused with `INPUT_INVALID`; it is never
+  silently accepted. `notifyOnCompletion: false` with a `notifyUrl` sends nothing.
 - `notifyUrl` must be a public `http`/`https` URL; private, loopback, link-local and cloud-metadata
   addresses are refused on the real connection.
 - `notificationSigningSecret` is write-only: it is stored encrypted and never returned or logged.
@@ -177,7 +225,9 @@ delivery carries three MyVocal headers:
 ## Complete example
 
 The runnable Batch client implements upload, submit, poll and download, then **deletes the test
-transcription**. Running it again after completion creates a new billable task:
+transcription**. It stops polling at `COMPLETED`, `PARTIAL` or `FAILED`; a `PARTIAL` task prints its
+readable text and status and stays in History. Running it again after completion creates a new
+billable task:
 [`examples/stt/stt_batch_minimal.py`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/stt/stt_batch_minimal.py).
 
 Read [Characters and quotes](/guides/characters-and-quotes) for how the charge and the shared balance

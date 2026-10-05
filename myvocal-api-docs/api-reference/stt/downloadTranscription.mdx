@@ -15,9 +15,11 @@ transcription result; later edits in the workspace do not overwrite this API res
 
 ### Query
 
-<ParamField query="format" type="string" required>
-  `txt`, `json`, `srt`, `segmented_json`, `html`, `docx` or `pdf`. The live list is returned by
-  [capabilities](/api-reference/stt/capabilities) as `downloadFormats`.
+<ParamField query="format" type="string" default="txt">
+  `txt`, `json`, `srt`, `segmented_json`, `html`, `docx` or `pdf`; `txt` when omitted. The live list
+  is returned by [capabilities](/api-reference/stt/capabilities) as `downloadFormats`. Any listed
+  format can be downloaded whether or not it was named in `exportFormats`; the `exportOptions` entry
+  submitted for that format applies.
 </ParamField>
 
 ### Header
@@ -28,10 +30,16 @@ transcription result; later edits in the workspace do not overwrite this API res
 
 ### Response
 
-The file bytes with `Content-Disposition: attachment` and `Cache-Control: no-store`. `txt` is the
-plain transcript text; `json` is the bare transcription view (no `code`/`message`/`data` envelope);
-the other formats are the rendered exports. Reading or re-downloading is free.
+The file bytes with `Content-Disposition: attachment` and `Cache-Control: no-store`. `txt` is one
+block per segment: a header with the time range (timed segments only) and the speaker label, then
+the text; `includeTimestamps: false` / `includeSpeakers: false` remove those header parts. `json` is
+the bare transcription view (no `code`/`message`/`data` envelope); `srt` contains timed segments
+only, so an untimed result gives an empty file. The other formats are the rendered exports. Reading
+or re-downloading is free.
 
 <Note>
-An unsupported format returns `EXPORT_FORMAT_UNAVAILABLE`. Ownership is re-checked on every request.
+Only `COMPLETED` tasks can be downloaded; any other status, including the terminal `PARTIAL`,
+returns `RESULT_NOT_READY`. Read a `PARTIAL` task's confirmed text from
+[Get a transcription](/api-reference/stt/getTranscription). An unsupported format returns
+`EXPORT_FORMAT_UNAVAILABLE`. Ownership is re-checked on every request.
 </Note>
