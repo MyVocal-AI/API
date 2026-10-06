@@ -3,6 +3,22 @@ title: "Real-time SDK — Java"
 description: "Stream audio to MyVocal Speech to Text from Java 8+ with ai.myvocal:myvocal-stt-realtime."
 ---
 
+`ai.myvocal:myvocal-stt-realtime:1.0.0` is not yet on Maven Central. Install the 1.0.0 files from the
+[GitHub Release](https://github.com/MyVocal-AI/myvocal-stt-realtime-sdks/releases/tag/v1.0.0) into your local Maven repository:
+
+```bash
+base=https://github.com/MyVocal-AI/myvocal-stt-realtime-sdks/releases/download/v1.0.0
+for f in myvocal-stt-realtime-1.0.0.jar myvocal-stt-realtime-1.0.0-sources.jar \
+         myvocal-stt-realtime-1.0.0-javadoc.jar myvocal-stt-realtime-1.0.0.pom SHA256SUMS; do
+  curl -fsSLO "$base/$f"
+done
+sha256sum --check --ignore-missing SHA256SUMS
+mvn install:install-file -Dfile=myvocal-stt-realtime-1.0.0.jar -DpomFile=myvocal-stt-realtime-1.0.0.pom \
+    -Dsources=myvocal-stt-realtime-1.0.0-sources.jar -Djavadoc=myvocal-stt-realtime-1.0.0-javadoc.jar
+```
+
+Then add the dependency:
+
 ```xml
 <dependency>
   <groupId>ai.myvocal</groupId>
