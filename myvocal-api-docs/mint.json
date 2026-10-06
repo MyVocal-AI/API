@@ -64,6 +64,16 @@
       ]
     },
     {
+      "group": "Speech to Text SDKs",
+      "pages": [
+        "sdks/stt-realtime/overview",
+        "sdks/stt-realtime/behavior",
+        "sdks/stt-realtime/java",
+        "sdks/stt-realtime/go",
+        "sdks/stt-realtime/python"
+      ]
+    },
+    {
       "group": "Guides",
       "pages": [
         "guides/music-quickstart",
