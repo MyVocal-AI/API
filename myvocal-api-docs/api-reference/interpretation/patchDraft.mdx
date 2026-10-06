@@ -4,12 +4,14 @@ api: "PATCH https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/{p
 description: "Update the source language, keyterms, cloning strength and target languages of a draft."
 ---
 
+<sub>**Interpretation** · Translate and dub uploaded audio/video · Workflow: [Interpretation quickstart](/guides/interpretation-quickstart) · Polling: [Async jobs and retries](/guides/async-jobs-and-retries)</sub>
+
 Updates only the fields you provide. This is a patch, not a replace.
 
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Path

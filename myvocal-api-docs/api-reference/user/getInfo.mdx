@@ -1,11 +1,15 @@
 ---
-title: "Get User Info"
+title: "Get account information"
+sidebarTitle: "Account information"
 api: "GET https://api.myvocal.ai/sound_clone/api/v1/user/info"
-description: "This endpoint gets or creates a new user."
+description: "Return the plan, subscription status and voice and Character quotas of the account that owns the API key."
 ---
+
+<sub>**Getting started** · Use this read-only call to verify your key: [First API request](/guides/get-started)</sub>
+
 ### Header
 <ParamField header="accessKey"   type="string" required>
-  You can copy your api-key on https://www.myvocal.ai/profile after you have subscribed to Pro or Business Plan.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 

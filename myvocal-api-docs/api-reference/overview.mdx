@@ -1,0 +1,203 @@
+---
+title: "API directory"
+sidebarTitle: "API directory"
+description: "Every MyVocal API endpoint, grouped by product, with links to the full reference."
+---
+
+All endpoints use the host `https://api.myvocal.ai` and the `accessKey` header ([Authentication](/api-reference/authentication)).
+Each product section links to its quickstart for the end-to-end workflow.
+
+## Account
+
+| Endpoint | Method | Path |
+|---|---|---|
+| [Get account information](/api-reference/user/getInfo) | `GET` | `/sound_clone/api/v1/user/info` |
+
+## Text to Speech
+
+Workflow: [TTS quickstart](/quickstart)
+
+### TTS API reference
+
+| Endpoint | Method | Path |
+|---|---|---|
+| [Create speech](/api-reference/tts/tts) | `POST` | `/sound_clone/api/v1/tts` |
+| [Stream speech](/api-reference/tts/ttsStream) | `POST` | `/sound_clone/api/v1/tts/stream` |
+
+### TTS History
+
+| Endpoint | Method | Path |
+|---|---|---|
+| [List TTS history](/api-reference/history/ttsList) | `GET` | `/sound_clone/api/v1/tts/list` |
+| [Get TTS audio URLs](/api-reference/history/ttsListUrl) | `POST` | `/sound_clone/api/v1/tts/query` |
+| [Delete TTS history](/api-reference/history/deleteTTS) | `DELETE` | `/sound_clone/api/v1/tts` |
+
+Models: [TTS Models & Migration](/api-reference/tts/models) · [V3 language codes](/api-reference/tts/v3-language-codes)
+
+## Speech to Text
+
+Workflow: [Batch quickstart](/guides/stt-batch-quickstart) · [Real-time quickstart](/guides/stt-realtime-quickstart)
+
+### STT API reference
+
+| Endpoint | Method | Path |
+|---|---|---|
+| [Speech to Text capabilities](/api-reference/stt/capabilities) | `GET` | `/sound_clone/api/v1/stt/capabilities` |
+
+#### Batch uploads
+
+| Endpoint | Method | Path |
+|---|---|---|
+| [Create an upload](/api-reference/stt/createUpload) | `POST` | `/sound_clone/api/v1/stt/uploads` |
+| [Sign an upload part](/api-reference/stt/signUploadPart) | `POST` | `/sound_clone/api/v1/stt/uploads/{uploadId}/parts/{partNumber}` |
+| [Complete an upload](/api-reference/stt/completeUpload) | `POST` | `/sound_clone/api/v1/stt/uploads/{uploadId}/complete` |
+| [Get an upload](/api-reference/stt/getUpload) | `GET` | `/sound_clone/api/v1/stt/uploads/{uploadId}` |
+
+#### Batch transcriptions
+
+| Endpoint | Method | Path |
+|---|---|---|
+| [Create a transcription](/api-reference/stt/createTranscription) | `POST` | `/sound_clone/api/v1/stt/transcriptions` |
+| [Get a transcription](/api-reference/stt/getTranscription) | `GET` | `/sound_clone/api/v1/stt/transcriptions/{transcriptionId}` |
+| [List transcriptions](/api-reference/stt/listTranscriptions) | `GET` | `/sound_clone/api/v1/stt/transcriptions` |
+| [Download a transcription](/api-reference/stt/downloadTranscription) | `GET` | `/sound_clone/api/v1/stt/transcriptions/{transcriptionId}/download` |
+| [Delete a transcription](/api-reference/stt/deleteTranscription) | `DELETE` | `/sound_clone/api/v1/stt/transcriptions/{transcriptionId}` |
+
+#### Real-time sessions
+
+| Endpoint | Method | Path |
+|---|---|---|
+| [Create a real-time session](/api-reference/stt/createSession) | `POST` | `/sound_clone/api/v1/stt/realtime/sessions` |
+| [Get a real-time session](/api-reference/stt/getSession) | `GET` | `/sound_clone/api/v1/stt/realtime/sessions/{sessionId}` |
+| [Pause a real-time session](/api-reference/stt/pauseSession) | `POST` | `/sound_clone/api/v1/stt/realtime/sessions/{sessionId}/pause` |
+| [Resume a real-time session](/api-reference/stt/resumeSession) | `POST` | `/sound_clone/api/v1/stt/realtime/sessions/{sessionId}/resume` |
+| [Finish a real-time session](/api-reference/stt/finishSession) | `POST` | `/sound_clone/api/v1/stt/realtime/sessions/{sessionId}/finish` |
+| [Create a browser ticket](/api-reference/stt/createTicket) | `POST` | `/sound_clone/api/v1/stt/realtime/sessions/{sessionId}/tickets` |
+
+SDKs: [Real-time SDKs](/sdks/stt-realtime/overview) (Java, Go, Python) · [Availability](/guides/stt-availability)
+
+## Voice cloning
+
+Workflow: [How to use voices](/guides/voice-quickstart)
+
+### Voice API reference
+
+| Endpoint | Method | Path |
+|---|---|---|
+| [Create a TTS voice](/api-reference/voice/addTTSVoice) | `POST` | `/sound_clone/api/v1/voices/tts` |
+| [Create a Cover voice](/api-reference/voice/addCoverVoice) | `POST` | `/sound_clone/api/v1/voices/vc` |
+| [Improve a TTS voice](/api-reference/voice/editTTSVoice) | `PUT` | `/sound_clone/api/v1/voices/tts/{voiceId}` |
+| [Improve a Cover voice](/api-reference/voice/editCoverVoice) | `PUT` | `/sound_clone/api/v1/voices/vc/{voiceId}` |
+| [List voices](/api-reference/voice/list) | `GET` | `/sound_clone/api/v1/voices` |
+| [Rename a voice](/api-reference/voice/updateVoiceName) | `PUT` | `/sound_clone/api/v1/voices/rename/{id}` |
+| [Delete a voice](/api-reference/voice/delete) | `DELETE` | `/sound_clone/api/v1/voices/{id}` |
+
+Cover voice training results are delivered by [Cover callbacks](/callback).
+
+## AI Cover
+
+Workflow: [AI Cover quickstart](/guides/cover-quickstart)
+
+| Endpoint | Method | Path |
+|---|---|---|
+| [Generate a cover](/api-reference/cover/cover) | `POST` | `/sound_clone/api/v1/cover` |
+
+### Cover History
+
+| Endpoint | Method | Path |
+|---|---|---|
+| [List Cover history](/api-reference/history/coverList) | `GET` | `/sound_clone/api/v1/cover/list` |
+| [Get Cover audio URLs](/api-reference/history/coverListUrl) | `POST` | `/sound_clone/api/v1/cover/query` |
+| [Delete Cover history](/api-reference/history/deleteCover) | `DELETE` | `/sound_clone/api/v1/cover` |
+
+Results of Generate a cover and of Cover voice training are delivered by [Cover callbacks](/callback).
+
+## Text to Music
+
+Workflow: [Text-to-Music quickstart](/guides/music-quickstart)
+
+### Music API reference
+
+| Endpoint | Method | Path |
+|---|---|---|
+| [Music capabilities](/api-reference/music/capabilities) | `GET` | `/sound_clone/api/v1/music/capabilities` |
+
+#### Create and generate
+
+| Endpoint | Method | Path |
+|---|---|---|
+| [Create a music project](/api-reference/music/createProject) | `POST` | `/sound_clone/api/v1/music/projects` |
+| [Get a music job](/api-reference/music/getJob) | `GET` | `/sound_clone/api/v1/music/jobs/{jobId}` |
+| [Get a music project](/api-reference/music/getProject) | `GET` | `/sound_clone/api/v1/music/projects/{projectId}` |
+| [Update the creative brief](/api-reference/music/updateBrief) | `PUT` | `/sound_clone/api/v1/music/projects/{projectId}/brief` |
+| [Edit the arrangement](/api-reference/music/updateArrangement) | `PUT` | `/sound_clone/api/v1/music/projects/{projectId}/arrangement` |
+| [Regenerate the arrangement](/api-reference/music/regenerateArrangement) | `POST` | `/sound_clone/api/v1/music/projects/{projectId}/arrangement/regenerate` |
+| [Quote a music generation](/api-reference/music/createQuote) | `POST` | `/sound_clone/api/v1/music/projects/{projectId}/quotes` |
+| [Generate the song](/api-reference/music/createGeneration) | `POST` | `/sound_clone/api/v1/music/projects/{projectId}/generations` |
+| [Get a playback URL](/api-reference/music/playbackUrl) | `GET` | `/sound_clone/api/v1/music/projects/{projectId}/playback-url` |
+| [Download the song](/api-reference/music/download) | `GET` | `/sound_clone/api/v1/music/projects/{projectId}/download` |
+
+#### Manage projects
+
+| Endpoint | Method | Path |
+|---|---|---|
+| [List music projects](/api-reference/music/listProjects) | `GET` | `/sound_clone/api/v1/music/projects` |
+| [Create a project version](/api-reference/music/createVersion) | `POST` | `/sound_clone/api/v1/music/projects/{projectId}/versions` |
+| [Rename a music project](/api-reference/music/renameProject) | `PATCH` | `/sound_clone/api/v1/music/projects/{projectId}/name` |
+| [Delete a music project](/api-reference/music/deleteProject) | `DELETE` | `/sound_clone/api/v1/music/projects/{projectId}` |
+
+## Interpretation
+
+Translate and dub uploaded audio/video. It is not a real-time interpretation service.
+
+Workflow: [Interpretation quickstart](/guides/interpretation-quickstart)
+
+### Interpretation API reference
+
+| Endpoint | Method | Path |
+|---|---|---|
+| [Interpretation capabilities](/api-reference/interpretation/capabilities) | `GET` | `/sound_clone/api/v1/interpretation/capabilities` |
+
+#### Upload the source
+
+| Endpoint | Method | Path |
+|---|---|---|
+| [Create an upload session](/api-reference/interpretation/createUpload) | `POST` | `/sound_clone/api/v1/interpretation/projects/{projectId}/uploads` |
+| [Sign an upload part](/api-reference/interpretation/signUploadPart) | `POST` | `/sound_clone/api/v1/interpretation/uploads/{uploadId}/parts` |
+| [Complete an upload](/api-reference/interpretation/completeUpload) | `POST` | `/sound_clone/api/v1/interpretation/uploads/{uploadId}/complete` |
+| [Get upload status](/api-reference/interpretation/getUpload) | `GET` | `/sound_clone/api/v1/interpretation/uploads/{uploadId}` |
+| [Remove the interpretation source](/api-reference/interpretation/deleteSource) | `DELETE` | `/sound_clone/api/v1/interpretation/projects/{projectId}/source` |
+
+#### Quote and generate
+
+| Endpoint | Method | Path |
+|---|---|---|
+| [Patch the interpretation draft](/api-reference/interpretation/patchDraft) | `PATCH` | `/sound_clone/api/v1/interpretation/projects/{projectId}/draft` |
+| [Quote interpretation targets](/api-reference/interpretation/createQuote) | `POST` | `/sound_clone/api/v1/interpretation/projects/{projectId}/quotes` |
+| [Accept an interpretation quote](/api-reference/interpretation/createGeneration) | `POST` | `/sound_clone/api/v1/interpretation/projects/{projectId}/generations` |
+| [Get an interpretation job](/api-reference/interpretation/getJob) | `GET` | `/sound_clone/api/v1/interpretation/jobs/{jobId}` |
+| [Get a retry plan](/api-reference/interpretation/retryPlan) | `GET` | `/sound_clone/api/v1/interpretation/projects/{projectId}/targets/{targetId}/retry-plan` |
+| [Retry a failed target](/api-reference/interpretation/retryTarget) | `POST` | `/sound_clone/api/v1/interpretation/projects/{projectId}/targets/{targetId}/retry` |
+
+#### Results and export
+
+| Endpoint | Method | Path |
+|---|---|---|
+| [Play an interpretation asset](/api-reference/interpretation/playback) | `GET` | `/sound_clone/api/v1/interpretation/assets/{assetId}/playback` |
+| [Create an export](/api-reference/interpretation/createExport) | `POST` | `/sound_clone/api/v1/interpretation/targets/{targetId}/exports` |
+| [Download an export](/api-reference/interpretation/downloadExport) | `GET` | `/sound_clone/api/v1/interpretation/exports/{exportId}/download` |
+
+#### Manage projects
+
+| Endpoint | Method | Path |
+|---|---|---|
+| [Create an interpretation project](/api-reference/interpretation/createProject) | `POST` | `/sound_clone/api/v1/interpretation/projects` |
+| [Get an interpretation project](/api-reference/interpretation/getProject) | `GET` | `/sound_clone/api/v1/interpretation/projects/{projectId}` |
+| [List interpretation projects](/api-reference/interpretation/listProjects) | `GET` | `/sound_clone/api/v1/interpretation/projects` |
+| [Rename an interpretation project](/api-reference/interpretation/renameProject) | `PATCH` | `/sound_clone/api/v1/interpretation/projects/{projectId}/name` |
+| [Delete an interpretation project](/api-reference/interpretation/deleteProject) | `DELETE` | `/sound_clone/api/v1/interpretation/projects/{projectId}` |
+
+## Integration concepts
+
+- [Characters, quotes and billing](/guides/characters-and-quotes)
+- [Async jobs, polling and retries](/guides/async-jobs-and-retries) (Text to Music and Interpretation)

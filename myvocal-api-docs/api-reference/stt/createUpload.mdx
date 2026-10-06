@@ -4,13 +4,15 @@ api: "POST https://api.myvocal.ai/sound_clone/api/v1/stt/uploads"
 description: "Reserve a presigned multi-part upload for a Batch transcription source."
 ---
 
+<sub>**Speech to Text · Batch** · Workflow: [Batch quickstart](/guides/stt-batch-quickstart)</sub>
+
 Creates a multi-part upload. Send the parts to the returned presigned URLs, then complete the upload.
 The server probes the file and builds the canonical audio used for the transcription.
 
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Body

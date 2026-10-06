@@ -1,11 +1,16 @@
 ---
-title: " AI Cover"
+title: "Generate a cover"
 api: "POST https://api.myvocal.ai/sound_clone/api/v1/cover"
-description: "Generate AI Cover"
+description: "Submit a song file and a Cover voice to create an AI cover. The result is delivered to your callback URL."
 ---
+
+<sub>**AI Cover** · Workflow: [AI Cover quickstart](/guides/cover-quickstart)</sub>
+
+The finished cover is delivered to your `callbackUrl`; see [Cover callbacks](/callback) (`COVER_SONG`). Generated covers are listed in [Cover History](/api-reference/history/coverList).
+
 ### Header
 <ParamField header="accessKey"   type="string" required>
-  You can copy your api-key on https://www.myvocal.ai/profile after you have subscribed to Pro or Business Plan.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 ### Body
 <ParamField body="voiceId" type="string" required>
@@ -39,7 +44,7 @@ Includes specific data.
 <Expandable title="Toggle object">
 
 <ResponseField name="webhookId" type="string">
-  When the request is successfully sent, a webhoodId will be synchronously returned. The same information will also be called back in the callbackUrl, which is used to correlate the request and the response.
+  When the request is successfully sent, a webhookId will be synchronously returned. The same information will also be called back in the callbackUrl, which is used to correlate the request and the response.
 </ResponseField>
 
 </Expandable>

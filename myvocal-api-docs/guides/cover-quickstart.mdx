@@ -1,0 +1,96 @@
+---
+title: "AI Cover quickstart"
+sidebarTitle: "Quickstart"
+description: "Submit a song and a Cover voice, receive the result on your callback URL, then fetch the cover from Cover History."
+---
+
+AI Cover turns a song into a cover version sung by a chosen voice. It is asynchronous and uses
+**callbacks**: the request returns a `webhookId` immediately, and the result is posted to your
+`callbackUrl` when processing ends.
+
+## Before you start
+
+- An API key; see [Authentication](/api-reference/authentication).
+- A public URL that accepts `POST` requests, to receive callbacks. Keep the same callback URL across
+  related requests. See [Cover callbacks](/callback).
+- A voice for the cover: your custom voice's id or a premade voice's id. Use
+  [List voices](/api-reference/voice/list) to find one. Creating your own Cover voice is optional; see
+  [How to use voices](/guides/voice-quickstart#cover-voice).
+- The song file: mp3 or wav, up to 50 MB.
+
+## Step 1: Generate the cover
+
+Send a `multipart/form-data` request to [Generate a cover](/api-reference/cover/cover):
+
+| Field | Required | Meaning |
+|---|---|---|
+| `voiceId` | Yes | Your custom voice's id or a premade voice's id. |
+| `title` | Yes | Up to 32 characters. If it is empty, the first 32 characters of the target song are used. |
+| `file` | Yes | The target song: mp3/wav, up to 50 MB. |
+| `callbackUrl` | Yes | Where the finished result is posted. |
+
+```bash
+curl --location --request POST 'https://api.myvocal.ai/sound_clone/api/v1/cover' \
+--header 'accessKey: <your_api_key>' \
+--form 'file=@"xxx/xxx.mp3"' \
+--form 'voiceId="111"' \
+--form 'title="test"' \
+--form 'callbackUrl="http://www.google.com"'
+```
+
+The response returns a `webhookId`. Store it to match the callback:
+
+```json
+{
+    "code": 1,
+    "message": "Success",
+    "data": {
+        "webhookId": "7812"
+    }
+}
+```
+
+## Step 2: Receive the callback
+
+When the cover is finished, MyVocal sends a `POST` to your `callbackUrl` with `webhookType` `COVER_SONG`,
+the same `webhookId`, a `status` of `SUCCESS` or `FAILURE`, a `summary` and, on success, `data`. Match the
+callback to your request by `webhookId`. The payload is described in [Cover callbacks](/callback).
+
+## Step 3: Get the cover audio from Cover History
+
+1. List your covers to find the record id:
+
+   ```bash
+   curl --location 'https://api.myvocal.ai/sound_clone/api/v1/cover/list' \
+   --header 'accessKey: <your_api_key>'
+   ```
+
+   Page further back with `limit` (10 to 1000, default 10) and `startBeforeCoverId`. See
+   [List Cover history](/api-reference/history/coverList).
+
+2. Request playable URLs for up to 1,000 ids:
+
+   ```bash
+   curl --location 'https://api.myvocal.ai/sound_clone/api/v1/cover/query' \
+   --header 'accessKey: <your_api_key>' \
+   --header 'Content-Type: application/json' \
+   --data '{
+     "ids":["22","13"]
+   }'
+   ```
+
+   Each item in `data` has the record `id` and its audio `url`. See
+   [Get Cover audio URLs](/api-reference/history/coverListUrl).
+
+To remove records, use [Delete Cover history](/api-reference/history/deleteCover) (up to 500 ids per request).
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Cover callbacks" icon="webhook" href="/callback">
+    Callback payload, statuses and samples.
+  </Card>
+  <Card title="How to use voices" icon="microphone" href="/guides/voice-quickstart">
+    Create or improve your own Cover voice.
+  </Card>
+</CardGroup>

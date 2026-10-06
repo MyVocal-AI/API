@@ -4,6 +4,8 @@ api: "POST https://api.myvocal.ai/sound_clone/api/v1/stt/realtime/sessions/{sess
 description: "Flush the tail, settle once and complete the task."
 ---
 
+<sub>**Speech to Text · Real-time** · Workflow: [Real-time quickstart](/guides/stt-realtime-quickstart) · [Real-time SDKs](/sdks/stt-realtime/overview)</sub>
+
 Finishes a session: the server stops accepting new audio, flushes the trailing segment, waits for the
 final result, settles the charge once and completes the task. A repeated finish returns the same task
 and never charges twice.
@@ -29,7 +31,7 @@ The audio outcome and the charge do not depend on supplements.
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Body

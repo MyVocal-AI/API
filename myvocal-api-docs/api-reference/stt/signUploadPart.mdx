@@ -4,6 +4,8 @@ api: "POST https://api.myvocal.ai/sound_clone/api/v1/stt/uploads/{uploadId}/part
 description: "Get the temporary URL for uploading one part."
 ---
 
+<sub>**Speech to Text · Batch** · Workflow: [Batch quickstart](/guides/stt-batch-quickstart)</sub>
+
 <ParamField header="accessKey" type="string" required>MyVocal API key.</ParamField>
 <ParamField path="uploadId" type="string" required>The upload id.</ParamField>
 <ParamField path="partNumber" type="integer" required>One-based part number, up to `totalParts`.</ParamField>

@@ -4,12 +4,14 @@ api: "POST https://api.myvocal.ai/sound_clone/api/v1/interpretation/uploads/{upl
 description: "Assemble the uploaded parts, probe the media and commit the source version."
 ---
 
+<sub>**Interpretation** · Translate and dub uploaded audio/video · Workflow: [Interpretation quickstart](/guides/interpretation-quickstart) · Polling: [Async jobs and retries](/guides/async-jobs-and-retries)</sub>
+
 Tells the service that all parts are uploaded. It assembles the object, probes the media, and publishes the source version.
 
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Path

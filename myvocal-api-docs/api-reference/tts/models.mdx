@@ -1,5 +1,6 @@
 ﻿---
 title: "TTS Models & Migration"
+sidebarTitle: "Models & migration"
 description: "Public model IDs, language behavior, and V2 to V3 migration guidance."
 ---
 
@@ -114,6 +115,10 @@ Other Accent behavior:
 - <b>Default path</b>: omit `modelId` and follow current V2/default mapping rules.
 - <b>Explicit V3 path</b>: set `modelId` to `myvocal_v3`.
 - <b>Explicit Accent path</b>: set `modelId` to `myvocal_v3_accent_enhance`.
+
+<Warning>
+`English(US)` currently uses the default model path. A public explicit `modelId` for `English(US)` is not published in this phase.
+</Warning>
 
 ## V2 to V3 migration guidance
 

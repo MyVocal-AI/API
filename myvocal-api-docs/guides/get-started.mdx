@@ -1,0 +1,82 @@
+---
+title: "Make your first API request"
+sidebarTitle: "First API request"
+description: "Get your API key, verify it with a read-only account call, then choose the product you want to integrate."
+---
+
+This page checks that your key works. It only reads your account information: it does not create a
+task, a voice or any other resource. No product requires you to complete the others first.
+
+## Step 1: Get your API key
+
+Use a MyVocal account that has API access:
+
+1. Sign in to [MyVocal Account](https://www.myvocal.ai/account).
+2. Open Account Info.
+3. Copy your API key.
+
+Every endpoint authenticates with the same header, `accessKey: <your_api_key>`. Keep the key on your
+server. See [Authentication](/api-reference/authentication) for the details and security practices.
+
+## Step 2: Verify the key
+
+Call [Get account information](/api-reference/user/getInfo). It is a read-only call.
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/user/info' \
+--header 'accessKey: <your_api_key>'
+```
+
+A valid key returns `code` `1` and your account data:
+
+```json
+{
+  "code": 1,
+  "message": "Success",
+  "data": {
+    "plan": "Business",
+    "status": "active",
+    "resetInDays": 2,
+    "benefit": {
+      "usedVoices": 146,
+      "totalVoices": 150,
+      "usedMonthlyChars": 3498604,
+      "totalMonthlyChars": 3500000,
+      "usedOrderChars": 0,
+      "totalOrderChars": 0
+    }
+  }
+}
+```
+
+Check `code`, not only the HTTP status: a failed request is also answered with HTTP `200` and a
+non-success `code` with a `message`.
+
+## Step 3: Choose a product
+
+Each guide lists its own prerequisites. A cloned voice is needed only if you want to use your own voice
+in Text to Speech or AI Cover; Speech to Text, Text to Music and Interpretation never need one.
+
+<CardGroup cols={2}>
+  <Card title="Text to Speech" icon="waveform-lines" href="/quickstart">
+    Synthesize speech with a prebuilt or custom voice.
+  </Card>
+  <Card title="Speech to Text" icon="file-audio" href="/guides/stt-batch-quickstart">
+    Transcribe a recording (Batch quickstart).
+  </Card>
+  <Card title="Voice cloning" icon="microphone" href="/guides/voice-quickstart">
+    Create a custom voice for Text to Speech or AI Cover.
+  </Card>
+  <Card title="AI Cover" icon="music" href="/guides/cover-quickstart">
+    Turn a song into a cover sung by a Cover voice.
+  </Card>
+  <Card title="Text to Music" icon="guitar" href="/guides/music-quickstart">
+    Generate an original song from a creative brief.
+  </Card>
+  <Card title="Interpretation" icon="language" href="/guides/interpretation-quickstart">
+    Translate and dub uploaded audio/video.
+  </Card>
+</CardGroup>
+
+To transcribe live audio instead, start with the [Real-time quickstart](/guides/stt-realtime-quickstart).
+Looking for a specific endpoint? Open the [API directory](/api-reference/overview).

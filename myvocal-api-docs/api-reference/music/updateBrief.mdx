@@ -4,12 +4,14 @@ api: "PUT https://api.myvocal.ai/sound_clone/api/v1/music/projects/{projectId}/b
 description: "Replace the creative brief of a music project. Invalidates the current quote."
 ---
 
+<sub>**Text to Music** · Workflow: [Text-to-Music quickstart](/guides/music-quickstart) · Polling: [Async jobs and retries](/guides/async-jobs-and-retries)</sub>
+
 Replaces the whole brief and re-validates it with the same rules as create. An existing quote becomes stale, so quote again before generating.
 
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Path

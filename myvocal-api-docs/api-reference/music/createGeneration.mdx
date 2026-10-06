@@ -4,12 +4,14 @@ api: "POST https://api.myvocal.ai/sound_clone/api/v1/music/projects/{projectId}/
 description: "Accept a quote and start the song generation job."
 ---
 
+<sub>**Text to Music** · Workflow: [Text-to-Music quickstart](/guides/music-quickstart) · Polling: [Async jobs and retries](/guides/async-jobs-and-retries)</sub>
+
 Accepts a quote, reserves its Characters and queues a `SONG` job. The call returns immediately; it does not wait for the song.
 
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 <ParamField header="Idempotency-Key" type="string" required>

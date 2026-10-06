@@ -1,5 +1,6 @@
 ---
 title: "Speech to Text — Real-time quickstart"
+sidebarTitle: "Real-time quickstart"
 description: "Stream microphone or line audio to MyVocal and receive partial and final transcripts."
 ---
 
@@ -10,9 +11,15 @@ History.
 Read [availability and known limitations](/guides/stt-availability), especially the connection
 recovery and processing-storage notes.
 
-<Tip>
-Prefer an SDK? The [Java, Go and Python real-time SDKs](/sdks/stt-realtime/overview) handle framing, sample offsets, rotation and finish for you.
-</Tip>
+## Choose how to connect
+
+| Option | Use it when | Where the API key lives |
+|---|---|---|
+| [Real-time SDK](/sdks/stt-realtime/overview) (Java, Go, Python) | Your server streams audio and you want framing, sample offsets, rotation and finish handled for you. | Your server |
+| Direct REST + WebSocket (this page) | Your server uses another language, or you want full control of the protocol. | Your server |
+| Browser with a server-issued ticket ([Step 3](#3-connect-the-socket)) | Audio is captured in a browser. Your server creates the session and a single-use ticket; the browser connects with `?ticket=`. | Your server only; never the browser |
+
+The steps below describe the direct protocol, which the SDKs implement for you.
 
 ## 1. Create a session
 
@@ -147,3 +154,9 @@ client-to-MyVocal connection alive on its own.
   (`node server.mjs`, see the [examples README](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/stt/README.md))
 
 Read [Characters and quotes](/guides/characters-and-quotes) for the billing rule.
+
+## Next steps
+
+- [Real-time SDKs](/sdks/stt-realtime/overview) for Java, Go and Python.
+- [Real-time session reference](/api-reference/stt/createSession), [finish](/api-reference/stt/finishSession) and [browser tickets](/api-reference/stt/createTicket).
+- [Availability and known limitations](/guides/stt-availability).

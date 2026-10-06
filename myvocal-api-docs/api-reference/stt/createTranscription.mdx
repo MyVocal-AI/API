@@ -4,13 +4,15 @@ api: "POST https://api.myvocal.ai/sound_clone/api/v1/stt/transcriptions"
 description: "Submit an uploaded file or a public media URL, quote and reserve Characters, and start the task."
 ---
 
+<sub>**Speech to Text · Batch** · Workflow: [Batch quickstart](/guides/stt-batch-quickstart)</sub>
+
 Submits one transcription from an `uploadId` or a public `mediaUrl`. The call quotes the work,
 reserves Characters and starts the asynchronous task in a single request.
 
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 <ParamField header="Idempotency-Key" type="string" required>

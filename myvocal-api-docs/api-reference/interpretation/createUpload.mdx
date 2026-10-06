@@ -4,12 +4,14 @@ api: "POST https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/{pr
 description: "Start a multipart upload for the project's source audio or video file."
 ---
 
+<sub>**Interpretation** · Translate and dub uploaded audio/video · Workflow: [Interpretation quickstart](/guides/interpretation-quickstart) · Polling: [Async jobs and retries](/guides/async-jobs-and-retries)</sub>
+
 Creates a multipart upload session. The service returns the part size and part count; the actual bytes are uploaded directly to object storage.
 
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Path

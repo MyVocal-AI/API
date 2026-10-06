@@ -1,12 +1,18 @@
 ---
 title: "Improve a TTS voice"
 api: "PUT https://docs.myvocal.ai/sound_clone/api/v1/voices/tts/{voiceId}"
-description: "Edit a custom TTS voice. You can upload more files to improve your voice.(❗❗❗File-related interfaces are not supported, please use interface tools for requests.)"
+description: "Upload more recordings to improve a custom Text to Speech voice."
 ---
+
+<sub>**Voice cloning** · Workflow: [How to use voices](/guides/voice-quickstart)</sub>
+
+<Note>
+The interactive playground on this page cannot send file uploads. This is a limitation of the documentation playground, not of the API. Send the `multipart/form-data` request to `https://api.myvocal.ai/sound_clone/api/v1/voices/tts/{voiceId}` from your own code or an HTTP tool, as in the request example.
+</Note>
 
 ### Header
 <ParamField header="accessKey"   type="string" required>
-  You can copy your api-key on https://www.myvocal.ai/profile after you have subscribed to Pro or Business Plan.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Body

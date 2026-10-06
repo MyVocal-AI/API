@@ -4,12 +4,14 @@ api: "DELETE https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects/{
 description: "Detach the uploaded source from a project and return to a draft."
 ---
 
+<sub>**Interpretation** · Translate and dub uploaded audio/video · Workflow: [Interpretation quickstart](/guides/interpretation-quickstart) · Polling: [Async jobs and retries](/guides/async-jobs-and-retries)</sub>
+
 Removes the committed source version so the project can be edited and re-uploaded. Returns the draft representation, the same shape as `PATCH /draft`.
 
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Path

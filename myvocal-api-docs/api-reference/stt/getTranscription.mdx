@@ -4,6 +4,8 @@ api: "GET https://api.myvocal.ai/sound_clone/api/v1/stt/transcriptions/{transcri
 description: "Read the task state, the transcript and the billing summary."
 ---
 
+<sub>**Speech to Text · Batch** · Workflow: [Batch quickstart](/guides/stt-batch-quickstart)</sub>
+
 Returns one transcription from the shared History. Poll this until `status` is `COMPLETED`,
 `PARTIAL` or `FAILED`.
 
@@ -16,7 +18,7 @@ Returns one transcription from the shared History. Poll this until `status` is `
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Response

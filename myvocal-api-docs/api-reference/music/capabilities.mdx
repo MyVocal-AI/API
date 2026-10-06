@@ -4,12 +4,14 @@ api: "GET https://api.myvocal.ai/sound_clone/api/v1/music/capabilities"
 description: "Read the Text-to-Music account state, rate card and accepted enum values."
 ---
 
+<sub>**Text to Music** · Workflow: [Text-to-Music quickstart](/guides/music-quickstart) · Polling: [Async jobs and retries](/guides/async-jobs-and-retries)</sub>
+
 Read this endpoint first. It tells you what the account may do and which enum values the write endpoints accept, so you never have to hard-code them.
 
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Response

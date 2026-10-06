@@ -1,11 +1,14 @@
 ---
-title: "Delete AI Cover"
+title: "Delete Cover history"
 api: "DELETE https://api.myvocal.ai/sound_clone/api/v1/cover"
-description: "Delete up to 500 tts history items once by ai_cover_id."
+description: "Delete up to 500 AI Cover history records in one request by AI Cover ID."
 ---
+
+<sub>**AI Cover · History** · Workflow: [AI Cover quickstart](/guides/cover-quickstart)</sub>
+
 ### Header
 <ParamField header="accessKey"   type="string" required>
-  You can copy your api-key on https://www.myvocal.ai/profile after you have subscribed to Pro or Business Plan.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 ### Body
 <ParamField body="ids" type="array" required>

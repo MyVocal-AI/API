@@ -4,6 +4,8 @@ api: "GET https://api.myvocal.ai/sound_clone/api/v1/stt/realtime/sessions/{sessi
 description: "Read the live state, usage and lines of a real-time session."
 ---
 
+<sub>**Speech to Text · Real-time** · Workflow: [Real-time quickstart](/guides/stt-realtime-quickstart) · [Real-time SDKs](/sdks/stt-realtime/overview)</sub>
+
 Returns one owned session. This is also the reconnect read: it reports the current `epoch`, the
 received/captured cursors and whether the socket is `accepting` audio.
 
@@ -16,7 +18,7 @@ received/captured cursors and whether the socket is `accepting` audio.
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Response
