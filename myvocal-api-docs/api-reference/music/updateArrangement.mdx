@@ -4,12 +4,14 @@ api: "PUT https://api.myvocal.ai/sound_clone/api/v1/music/projects/{projectId}/a
 description: "Edit an arrangement by merging the editable fields into the current immutable arrangement."
 ---
 
+<sub>**Text to Music** · Workflow: [Text-to-Music quickstart](/guides/music-quickstart) · Polling: [Async jobs and retries](/guides/async-jobs-and-retries)</sub>
+
 The body is an **edit request**, not a whole arrangement. The service merges your edit into the current immutable arrangement and re-validates the result.
 
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Path

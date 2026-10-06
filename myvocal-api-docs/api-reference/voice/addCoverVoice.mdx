@@ -1,13 +1,21 @@
 ---
-title: "Add Voice for AI Cover"
+title: "Create a Cover voice"
 api: "POST https://docs.myvocal.ai/sound_clone/api/v1/voices/vc"
 header: "content-type: multipart/form-data"
-description: "Create a new custom voice for AI Cover feature.(❗❗❗File-related interfaces are not supported, please use interface tools for requests.)"
+description: "Clone a custom AI Cover voice from your recordings. Training finishes asynchronously and is reported to your callback URL."
 ---
+
+<sub>**Voice cloning** · Workflow: [How to use voices](/guides/voice-quickstart)</sub>
+
+The training result is delivered to your `callbackUrl`; see [Cover callbacks](/callback) (`TRAIN_COVER_SPEAKER`).
+
+<Note>
+The interactive playground on this page cannot send file uploads. This is a limitation of the documentation playground, not of the API. Send the `multipart/form-data` request to `https://api.myvocal.ai/sound_clone/api/v1/voices/vc` from your own code or an HTTP tool, as in the request example.
+</Note>
 
 ### Header
 <ParamField header="accessKey"   type="string" required>
-  You can copy your api-key on https://www.myvocal.ai/profile after you have subscribed to Pro or Business Plan.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Body
@@ -41,7 +49,7 @@ Includes specific data.
 <Expandable title="Toggle object">
 
 <ResponseField name="webhookId" type="string">
-  When the request is successfully sent, a webhoodId will be synchronously returned. The same information will also be called back in the callbackUrl, which is used to correlate the request and the response.
+  When the request is successfully sent, a webhookId will be synchronously returned. The same information will also be called back in the callbackUrl, which is used to correlate the request and the response.
 </ResponseField>
 
 </Expandable>

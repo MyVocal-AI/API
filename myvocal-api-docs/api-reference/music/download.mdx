@@ -4,6 +4,8 @@ api: "GET https://api.myvocal.ai/sound_clone/api/v1/music/projects/{projectId}/d
 description: "Stream the finished song as MP3 bytes."
 ---
 
+<sub>**Text to Music** · Workflow: [Text-to-Music quickstart](/guides/music-quickstart) · Polling: [Async jobs and retries](/guides/async-jobs-and-retries)</sub>
+
 <Warning>
 This endpoint does **not** return the usual JSON envelope on success. Success is an `audio/mpeg` byte stream. A rejected request, by contrast, is answered with the standard JSON error envelope. Check `Content-Type` (or the JSON `code`) before writing the file, so an error message is never saved as an `.mp3`.
 </Warning>
@@ -11,7 +13,7 @@ This endpoint does **not** return the usual JSON envelope on success. Success is
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Path

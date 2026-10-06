@@ -4,12 +4,14 @@ api: "GET https://api.myvocal.ai/sound_clone/api/v1/interpretation/capabilities"
 description: "Read the Interpretation account state, rate, language catalog and supported formats."
 ---
 
+<sub>**Interpretation** · Translate and dub uploaded audio/video · Workflow: [Interpretation quickstart](/guides/interpretation-quickstart) · Polling: [Async jobs and retries](/guides/async-jobs-and-retries)</sub>
+
 Read this endpoint first. It publishes the language keys you may request, the accepted input formats, the export formats and the account's rate — instead of hard-coding any of them.
 
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Response

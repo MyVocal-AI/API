@@ -1,100 +1,116 @@
 ---
-title: "Introduction"
-description: "Build with MyVocal: Speech to Text, voice cloning, Text-to-Speech, AI Cover, Text-to-Music and Interpretation."
+title: "MyVocal API"
+sidebarTitle: "Product overview"
+description: "Choose a MyVocal product: Text to Speech, Speech to Text, Voice cloning, AI Cover, Text to Music or Interpretation."
 ---
 
-<Info>
-MyVocal exposes several product APIs behind one public host and one `accessKey` header: **Speech to Text**, **Voice**, **Text-to-Speech** (including the Accent model), **AI Cover**, **Text-to-Music** and **Interpretation**.
-</Info>
+All MyVocal products share one public host, `https://api.myvocal.ai`, and one `accessKey` request header.
+Pick the product you need; each card starts at that product's shortest working path. You do not need to
+create a voice or try every product first.
 
-## Product lines
+<a id="product-lines"></a>
+<a id="what-you-can-build-with-myvocal"></a>
 
-| Product line | What it does | Response style |
-|---|---|---|
-| Speech to Text | Transcribe files or live audio | Batch tasks with polling; real-time WebSocket events |
-| Voice | Clone and manage voices | Synchronous JSON |
-| Text-to-Speech | Synthesize speech from text | Audio stream (default and `myvocal_v3`) |
-| AI Cover | Cover a song with a cloned voice | Asynchronous callback (webhook) |
-| Text-to-Music | Create an original song from a creative brief | Asynchronous, poll with the returned job/project IDs |
-| Interpretation | Upload audio or video, then produce translated dubbing | Asynchronous, poll with the returned project/job/target IDs |
+## Choose a product
 
-## What you can build with MyVocal
-
-- Transcribe recordings with [Batch STT](/guides/stt-batch-quickstart), or stream live audio with [Real-time STT](/guides/stt-realtime-quickstart).
-- Clone a custom voice with the Voice API.
-- Generate speech with that voice using the Text-to-Speech API.
-- Create AI song covers with the same voice using the AI Cover API.
-- Generate original music from a text brief with the Text-to-Music API.
-- Translate and dub an uploaded audio or video file with the Interpretation API.
-
-## Core workflow
-
-Voice-based integrations usually follow a simple flow:
-
-1. Clone or prepare a voice
-2. Use the voice for text-to-speech
-3. Use the same voice for AI song covers
-
-<Info>
-Text-to-Music and Interpretation are **not** voice-dependent. They take a text brief (Text-to-Music) or an uploaded media file (Interpretation), so they do not require a cloned voice, and they do not require a workspace/browser session. Both authenticate with the same `accessKey` header.
-</Info>
-
-## Synchronous, streaming and asynchronous APIs
-
-- **Speech to Text** accepts uploaded files or public media URLs for Batch, and audio frames over a WebSocket for Real-time. It reuses your existing API key, STT rates, Characters balance and workspace History. See [STT availability and known limitations](/guides/stt-availability).
-- **Voice** and **user info** return JSON immediately.
-- **Text-to-Speech** returns an audio stream; read `Content-Type` before trusting the body.
-- **AI Cover** uses a callback URL that you provide. See [Callback](/callback).
-- **Text-to-Music** and **Interpretation** are **poll-based**. They return a project/job identifier immediately, then you poll the project or job endpoints until the resource reaches a terminal state. They do not require a callback URL and do not deliver webhooks.
-
-## How TTS models work
-
-If you are calling the Text-to-Speech API, you can either use the default model path or explicitly choose a public `modelId` such as `myvocal_v3`.
-
-- <b>Default model path</b>: do not send `modelId`.
-- <b>Explicit model path</b>: send a public `modelId`, for example `myvocal_v3`.
-
-Publicly documented model IDs in this phase:
-
-```text
-myvocal_v3
-english_v2
-spanish_es
-portuguese_pt
-multilingual_v2
-spanish_la
-portuguese_la
-```
-
-<Warning>
-`English(US)` currently uses the default model path. A public explicit `modelId` for `English(US)` is not published in this phase.
-</Warning>
-
-## Next steps
-
-<CardGroup cols={3}>
-  <Card title="Batch Speech to Text" icon="file-audio" href="/guides/stt-batch-quickstart">
-    Upload or link a recording, transcribe it and download the result.
+<CardGroup cols={2}>
+  <Card title="Text to Speech" icon="waveform-lines" href="/quickstart">
+    **Input:** text and a `voiceId` (prebuilt or your own).<br />
+    **Result:** an audio stream (normally `audio/mpeg`) in the response.<br />
+    **Start:** TTS quickstart →
   </Card>
-  <Card title="Real-time Speech to Text" icon="microphone" href="/guides/stt-realtime-quickstart">
-    Stream audio and receive partial and final transcripts.
+  <Card title="Speech to Text" icon="file-audio" href="/guides/stt-batch-quickstart">
+    **Input:** an uploaded recording, a public media URL, or live audio.<br />
+    **Result:** a transcript to poll and download (Batch), or partial and final events over a WebSocket (Real-time).<br />
+    **Start:** Batch quickstart → (live audio: Real-time quickstart, below)
   </Card>
-  <Card title="Quickstart" icon="rocket" href="/quickstart">
-    Make your first MyVocal API call in a few steps.
+  <Card title="Voice cloning" icon="microphone" href="/guides/voice-quickstart">
+    **Input:** your own mp3/wav/m4a recordings.<br />
+    **Result:** a custom `voiceId` for Text to Speech or for AI Cover.<br />
+    **Start:** How to use voices →
   </Card>
-  <Card title="Authentication" icon="key" href="/api-reference/authentication">
-    Use your accessKey to authenticate API requests.
+  <Card title="AI Cover" icon="music" href="/guides/cover-quickstart">
+    **Input:** a song file (mp3/wav) and a Cover voice.<br />
+    **Result:** a cover version, reported to your callback URL and listed in Cover History.<br />
+    **Start:** AI Cover quickstart →
   </Card>
-  <Card title="TTS Models & Migration" icon="arrows-rotate" href="/api-reference/tts/models">
-    Learn when to use the default TTS path and when to use `myvocal_v3`.
+  <Card title="Text to Music" icon="guitar" href="/guides/music-quickstart">
+    **Input:** a creative brief (description, genre, moods, duration).<br />
+    **Result:** an original song you poll for, then play or download as MP3.<br />
+    **Start:** Text-to-Music quickstart →
   </Card>
-  <Card title="Text-to-Music quickstart" icon="music" href="/guides/music-quickstart">
-    Go from a creative brief to a downloadable MP3.
-  </Card>
-  <Card title="Interpretation quickstart" icon="language" href="/guides/interpretation-quickstart">
-    Upload a file and produce translated dubbing.
-  </Card>
-  <Card title="Characters, quotes and retries" icon="coins" href="/guides/characters-and-quotes">
-    Understand quoting, reservation, settlement and release.
+  <Card title="Interpretation" icon="language" href="/guides/interpretation-quickstart">
+    **Translate and dub uploaded audio/video.**<br />
+    **Input:** an uploaded audio or video file and target languages.<br />
+    **Result:** translated, dubbed versions you poll for, then play or export.<br />
+    **Start:** Interpretation quickstart →
   </Card>
 </CardGroup>
+
+Speech to Text has two starting points: the [Batch quickstart](/guides/stt-batch-quickstart) for recordings and the
+[Real-time quickstart](/guides/stt-realtime-quickstart) for live audio.
+
+<a id="next-steps"></a>
+
+## Make your first request
+
+<CardGroup cols={3}>
+  <Card title="First API request" icon="rocket" href="/guides/get-started">
+    Get your key, verify it with one free read call, then pick a product.
+  </Card>
+  <Card title="Authentication" icon="key" href="/api-reference/authentication">
+    The `accessKey` header, where to find your key and how to keep it safe.
+  </Card>
+  <Card title="API directory" icon="list" href="/api-reference/overview">
+    Every endpoint, grouped by product.
+  </Card>
+</CardGroup>
+
+## Real-time Speech to Text SDKs
+
+Server-side SDKs for the real-time Speech to Text API. They are optional: you can also call the REST and
+WebSocket API directly.
+
+<CardGroup cols={4}>
+  <Card title="Install" icon="download" href="/sdks/stt-realtime/overview">
+    Packages and runtimes.
+  </Card>
+  <Card title="Python" icon="python" href="/sdks/stt-realtime/python">
+    Python 3.10+
+  </Card>
+  <Card title="Java" icon="java" href="/sdks/stt-realtime/java">
+    Java 8+
+  </Card>
+  <Card title="Go" icon="golang" href="/sdks/stt-realtime/go">
+    Go 1.22+
+  </Card>
+</CardGroup>
+
+## Voices and TTS models
+
+<a id="core-workflow"></a>
+
+- Text to Speech and AI Cover take a `voiceId`. Cloning your own voice is optional; see
+  [How to use voices](/guides/voice-quickstart). The other products do not use voices.
+
+<a id="how-tts-models-work"></a>
+
+- Text to Speech uses the default model path when you omit `modelId`, or the model you name with a public
+  `modelId` such as `myvocal_v3`. See [TTS Models & Migration](/api-reference/tts/models) for the list.
+
+<a id="synchronous-streaming-and-asynchronous-apis"></a>
+
+## How results come back
+
+Products return results in different ways. Use the mechanism of the product you integrate:
+
+| Product | How you get the result |
+|---|---|
+| Text to Speech, Voice cloning (TTS voices), account information | In the HTTP response |
+| Speech to Text — Batch | Poll the transcription; an optional [signed completion notification](/guides/stt-batch-quickstart#completion-notifications) is available |
+| Speech to Text — Real-time | WebSocket events, then `finish` |
+| AI Cover, Cover voice creation and improvement | [Cover callbacks](/callback) to your `callbackUrl` |
+| Text to Music, Interpretation | Poll the project or job; see [Async jobs, polling and retries](/guides/async-jobs-and-retries) |
+
+For how Speech to Text, Text to Music and Interpretation charge Characters, see [Characters and billing](/guides/characters-and-quotes).
+Your plan and balance are returned by [Get account information](/api-reference/user/getInfo).

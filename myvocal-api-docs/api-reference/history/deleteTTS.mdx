@@ -1,11 +1,14 @@
 ---
-title: "Delete TTS"
+title: "Delete TTS history"
 api: "DELETE https://api.myvocal.ai/sound_clone/api/v1/tts"
-description: "Delete up to 500 tts history items once by tts_id."
+description: "Delete up to 500 Text to Speech history records in one request by TTS ID."
 ---
+
+<sub>**Text to Speech · History** · Workflow: [TTS quickstart](/quickstart#step-7-query-history-and-output-urls)</sub>
+
 ### Header
 <ParamField header="accessKey"   type="string" required>
-  You can copy your api-key on https://www.myvocal.ai/profile after you have subscribed to Pro or Business Plan.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 ### Body
 <ParamField body="ids" type="array" required>

@@ -4,6 +4,8 @@ api: "POST https://api.myvocal.ai/sound_clone/api/v1/stt/realtime/sessions/{sess
 description: "Exchange the accessKey for a short-lived, single-use socket ticket."
 ---
 
+<sub>**Speech to Text · Real-time** · Workflow: [Real-time quickstart](/guides/stt-realtime-quickstart) · [Real-time SDKs](/sdks/stt-realtime/overview)</sub>
+
 Issues a short-lived ticket for one owned session so a browser can open the socket without exposing
 the long-lived key in a URL. The ticket is single-use and bound to the owner and the session; a
 reconnect requests a fresh one. A replayed or expired ticket is refused at the handshake.

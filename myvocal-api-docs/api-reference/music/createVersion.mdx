@@ -4,12 +4,14 @@ api: "POST https://api.myvocal.ai/sound_clone/api/v1/music/projects/{projectId}/
 description: "Branch a child project from the current arrangement."
 ---
 
+<sub>**Text to Music** · Workflow: [Text-to-Music quickstart](/guides/music-quickstart) · Polling: [Async jobs and retries](/guides/async-jobs-and-retries)</sub>
+
 Creates a child project that starts from the parent's current arrangement, so you can iterate without losing the original.
 
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 <ParamField header="Idempotency-Key" type="string" required>

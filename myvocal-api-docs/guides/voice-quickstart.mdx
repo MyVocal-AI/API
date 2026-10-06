@@ -1,0 +1,128 @@
+---
+title: "How to use voices"
+sidebarTitle: "How to use voices"
+description: "Find a voice for Text to Speech or AI Cover, and optionally clone, improve, rename or delete your own."
+---
+
+A voice is identified by a `voiceId`. Text to Speech and AI Cover take a `voiceId`; Speech to Text, Text to
+Music and Interpretation do not use voices at all.
+
+**Cloning is optional.** Start by listing the voices your API key can already use; create a custom voice
+only if you want your own.
+
+## Two kinds of custom voices
+
+Custom voices are created for one feature. The `feature` field of [List voices](/api-reference/voice/list)
+shows which one.
+
+| | TTS voice | Cover voice |
+|---|---|---|
+| Used by | [Text to Speech](/quickstart) | [AI Cover](/guides/cover-quickstart) |
+| `feature` in the voice list | `text-to-speech` | `ai-cover` |
+| Create | [Create a TTS voice](/api-reference/voice/addTTSVoice) `POST /sound_clone/api/v1/voices/tts` | [Create a Cover voice](/api-reference/voice/addCoverVoice) `POST /sound_clone/api/v1/voices/vc` |
+| Result | `voiceId` returned in the response (`data.id`) | Training is asynchronous: a `webhookId` is returned, and the result is sent to your `callbackUrl` as `TRAIN_COVER_SPEAKER` ([Cover callbacks](/callback)) |
+| Improve | [Improve a TTS voice](/api-reference/voice/editTTSVoice) | [Improve a Cover voice](/api-reference/voice/editCoverVoice) (result sent as `EDIT_COVER_SPEAKER`) |
+| Audio files | mp3/wav/m4a, up to 10 MB each, up to 25 files | mp3/wav/m4a, up to 10 MB each, up to 25 files, more than 1 minute of effective voice in total (silence excluded) |
+
+<Note>
+The interactive playground on the create and improve pages cannot send file uploads. This is a limitation
+of the documentation playground, not of the API. Send the `multipart/form-data` requests from your own code
+or an HTTP tool, as in the examples below.
+</Note>
+
+## Step 1: List the voices you can use
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/voices' \
+--header 'accessKey: <your_api_key>'
+```
+
+Each item has an `id` (use it as `voiceId`), a `name`, a `type` (`cloned` or `designed`), a `feature`
+(`text-to-speech` or `ai-cover`) and a `channel` (`web` or `api`).
+
+- For the Accent TTS model, add `?modelId=myvocal_v3_accent_enhance`. That list includes your own
+  compatible voices plus the prebuilt voices available to your API key. It is a selection aid, not a
+  guarantee that a later generation will succeed.
+- [Generate a cover](/api-reference/cover/cover) accepts your custom voice's id or a premade voice's id.
+
+If a listed voice fits your use, you can go straight to [Text to Speech](/quickstart) or
+[AI Cover](/guides/cover-quickstart).
+
+## Step 2: Create your own voice (optional)
+
+### TTS voice
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/voices/tts' \
+--header 'accessKey: <your_api_key>' \
+--form 'files=@"xxx/xxx.mp3"' \
+--form 'name="111"'
+```
+
+`name` must not exceed 32 characters. The response returns the new voice's id:
+
+```json
+{
+    "code": 1,
+    "message": "Success",
+    "data": {
+        "id": "7812"
+    }
+}
+```
+
+Use `data.id` as `voiceId` in [Create speech](/api-reference/tts/tts). To improve the voice later, upload
+more files with [Improve a TTS voice](/api-reference/voice/editTTSVoice) (the 25-file limit includes the
+files you uploaded when creating it).
+
+### Cover voice
+
+You need a public URL that accepts `POST` requests to receive the result; see [Cover callbacks](/callback).
+
+```bash
+curl --location 'https://api.myvocal.ai/sound_clone/api/v1/voices/vc' \
+--header 'accessKey: <your_api_key>' \
+--form 'files=@"xxx/xxx.mp3"' \
+--form 'name="111"' \
+--form 'callbackUrl="http://www.google.com"'
+```
+
+The response returns a `webhookId` immediately:
+
+```json
+{
+    "code": 1,
+    "message": "Success",
+    "data": {
+        "webhookId": "1701406584rkzy91"
+    }
+}
+```
+
+When training ends, MyVocal posts a `TRAIN_COVER_SPEAKER` callback with the same `webhookId` and a
+`status` of `SUCCESS` or `FAILURE`. The documented success sample carries the voice id in `data.id`.
+To improve a Cover voice, use [Improve a Cover voice](/api-reference/voice/editCoverVoice); its result
+arrives as an `EDIT_COVER_SPEAKER` callback.
+
+## Step 3: Manage your voices
+
+| Task | Endpoint |
+|---|---|
+| Rename a voice | [Rename a voice](/api-reference/voice/updateVoiceName) `PUT /sound_clone/api/v1/voices/rename/{id}` |
+| Delete a custom voice | [Delete a voice](/api-reference/voice/delete) `DELETE /sound_clone/api/v1/voices/{id}` |
+
+<Info>
+Voice design is temporarily unavailable. Voices you created with it earlier are still returned by
+List voices and still work with Text to Speech; see [Voice Design (temporarily unavailable)](/api-reference/voice/designVoice).
+</Info>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Text to Speech quickstart" icon="waveform-lines" href="/quickstart">
+    Synthesize speech with your `voiceId`.
+  </Card>
+  <Card title="AI Cover quickstart" icon="music" href="/guides/cover-quickstart">
+    Create a cover with a Cover voice.
+  </Card>
+</CardGroup>

@@ -4,6 +4,8 @@ api: "GET https://api.myvocal.ai/sound_clone/api/v1/stt/transcriptions/{transcri
 description: "Download the result as txt, json, srt, segmented_json, html, docx or pdf."
 ---
 
+<sub>**Speech to Text · Batch** · Workflow: [Batch quickstart](/guides/stt-batch-quickstart)</sub>
+
 Returns the result as a file using MyVocal fields and formatting. Downloads use the original
 transcription result; later edits in the workspace do not overwrite this API result.
 
@@ -25,7 +27,7 @@ transcription result; later edits in the workspace do not overwrite this API res
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Response

@@ -4,6 +4,8 @@ api: "POST https://api.myvocal.ai/sound_clone/api/v1/stt/realtime/sessions"
 description: "Start a streaming transcription session and get its socket URL."
 ---
 
+<sub>**Speech to Text · Real-time** · Workflow: [Real-time quickstart](/guides/stt-realtime-quickstart) · [Real-time SDKs](/sdks/stt-realtime/overview)</sub>
+
 Creates a real-time session. Audio is then streamed over the returned `streamUrl`. The session shares
 History and the Characters balance with Batch.
 
@@ -40,7 +42,7 @@ curl --request POST \
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 <ParamField header="Idempotency-Key" type="string" required>

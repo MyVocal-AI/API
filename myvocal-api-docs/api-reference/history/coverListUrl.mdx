@@ -1,11 +1,14 @@
 ---
-title: "Get AI Cover Url"
+title: "Get Cover audio URLs"
 api: "POST https://api.myvocal.ai/sound_clone/api/v1/cover/query"
-description: "Get ai cover audio url."
+description: "Get playable audio URLs for up to 1,000 AI Cover history records."
 ---
+
+<sub>**AI Cover · History** · Workflow: [AI Cover quickstart](/guides/cover-quickstart)</sub>
+
 ### Header
 <ParamField header="accessKey"   type="string" required>
-  You can copy your api-key on https://www.myvocal.ai/profile after you have subscribed to Pro or Business Plan.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Body
@@ -27,10 +30,10 @@ description: "Get ai cover audio url."
   <Expandable title="Toggle object">
    
   <ResponseField name="id" type="string">
-      Your tts id.
+      Your AI Cover id.
   </ResponseField>
    <ResponseField name="url" type="string">
-     The audio file url corresponding to ttsId.
+     The audio file URL for that AI Cover id.
   </ResponseField>
   </Expandable>
 </ResponseField>

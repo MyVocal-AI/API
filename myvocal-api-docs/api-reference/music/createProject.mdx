@@ -4,12 +4,14 @@ api: "POST https://api.myvocal.ai/sound_clone/api/v1/music/projects"
 description: "Start a Text-to-Music project from a creative brief. Returns the project and its arrangement job."
 ---
 
+<sub>**Text to Music** · Workflow: [Text-to-Music quickstart](/guides/music-quickstart) · Polling: [Async jobs and retries](/guides/async-jobs-and-retries)</sub>
+
 Creates the project and immediately queues the **arrangement** stage. This is asynchronous: the response does not contain a song.
 
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 <ParamField header="Idempotency-Key" type="string" required>

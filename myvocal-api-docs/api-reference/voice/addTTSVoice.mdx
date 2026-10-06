@@ -1,13 +1,19 @@
 ---
-title: "Add Voice for TTS"
+title: "Create a TTS voice"
 api: "POST https://docs.myvocal.ai/sound_clone/api/v1/voices/tts"
 header: "content-type: multipart/form-data"
-description: "Create a new custom voice for Text-to-Speech feature(❗❗❗File-related interfaces are not supported, please use interface tools for requests.)"
+description: "Clone a custom Text to Speech voice from your recordings. The voiceId is returned in the response."
 ---
+
+<sub>**Voice cloning** · Workflow: [How to use voices](/guides/voice-quickstart)</sub>
+
+<Note>
+The interactive playground on this page cannot send file uploads. This is a limitation of the documentation playground, not of the API. Send the `multipart/form-data` request to `https://api.myvocal.ai/sound_clone/api/v1/voices/tts` from your own code or an HTTP tool, as in the request example.
+</Note>
 
 ### Header
 <ParamField header="accessKey"   type="string" required>
-  You can copy your api-key on https://www.myvocal.ai/profile after you have subscribed to Pro or Business Plan.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Body

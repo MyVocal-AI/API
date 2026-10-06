@@ -1,20 +1,23 @@
 ---
-title: "Get AI Cover List"
+title: "List Cover history"
 api: "GET https://api.myvocal.ai/sound_clone/sound_clone/api/v1/cover/list"
-description: "Return metadata about all your generated tts audio."
+description: "List your AI Cover history records, with a cursor for older records."
 ---
+
+<sub>**AI Cover · History** · Workflow: [AI Cover quickstart](/guides/cover-quickstart)</sub>
+
 ### Header
 <ParamField header="accessKey"   type="string" required>
-  You can copy your api-key on https://www.myvocal.ai/profile after you have subscribed to Pro or Business Plan.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Body
 <ParamField body="limit" type="number" default="10">
-<div>The number of TTS History queries at one time, supporting 10 ~ 1000 data queries at a time.</div>
+<div>The number of AI Cover history records returned at one time, supporting 10 ~ 1000 data queries at a time.</div>
 <div>If this parameter is empty, the default value is 10.</div>
 </ParamField>
 <ParamField body="startBeforeCoverId" type="string">
-<div>If this parameter is provided, we will start tracing back to earlier TTS History from this TTS item.</div>
+<div>If this parameter is provided, we will start tracing back to earlier AI Cover history from this AI Cover item.</div>
 <div>If this parameter is empty, then we will default to tracing back directly from the most recent data.</div>
 </ParamField>
 
@@ -31,34 +34,34 @@ description: "Return metadata about all your generated tts audio."
 Includes specific data.
     <Expandable title="Toggle object">
       <ResponseField name="hasMore" type="boolean" >
-                <div>If there is no earlier created TTS item, then callback 1</div>
-                <div>If there are still earlier created TTS items, then callback 0</div>
+                <div>If there is no earlier created AI Cover item, then callback 1</div>
+                <div>If there are still earlier created AI Cover items, then callback 0</div>
             </ResponseField>
       <ResponseField name="earliestHistoryItemId" type="String" >
-                The earliest ttsid in this callback.
+                The earliest AI Cover id in this response.
         </ResponseField>
         <ResponseField name="list" type="list">
-                The specific info of TTS history queried this time.
+                The AI Cover history records returned by this request.
             <Expandable title="Toggle object">
             <ResponseField name="id" type="string" >
-                tts id
+                AI Cover id
             </ResponseField>
             <ResponseField name="title" type="string" >
-                tts title
+                AI Cover title
             </ResponseField>
 
             <ResponseField name="useChars" type="number" >
-            character count of this TTS item.
+            character count of this AI Cover item.
             </ResponseField>
 
             <ResponseField name="channel" type="string" >
             web or api
             </ResponseField>
             <ResponseField name="voiceId" type="string" >
-                The voiceid of the voice used to generate this TTS
+                The voiceId of the voice used to generate this AI Cover
             </ResponseField>
             <ResponseField name="voiceName" type="string" >
-                TThe voicename of the voice used to generate this TTS.
+                The voice name of the voice used to generate this AI Cover.
             </ResponseField>
             </Expandable>
         </ResponseField>

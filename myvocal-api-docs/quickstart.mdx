@@ -1,23 +1,19 @@
 ---
-title: "Quickstart"
-description: "Call MyVocal APIs end-to-end with the default TTS path, myvocal_v3 or the Accent model."
+title: "Text to Speech quickstart"
+sidebarTitle: "TTS quickstart"
+description: "Synthesize speech on the default TTS path, then optionally try myvocal_v3, the Accent model and TTS History."
 ---
 
 <Info>
 This quickstart uses production API host `https://api.myvocal.ai` and the `accessKey` request header.
-</Info>
-
-<Info>
-For transcription, start with [Batch Speech to Text](/guides/stt-batch-quickstart) or
-[Real-time Speech to Text](/guides/stt-realtime-quickstart). Both reuse your existing MyVocal
-API key and do not require a cloned voice. The synthesis quickstart below remains unchanged.
+Steps 1–3 are the shortest path to one synthesized audio file. The optional sections after them are
+independent of each other; use only the ones you need.
 </Info>
 
 ## Step 1: Get your API key
 
-1. Sign in to [MyVocal account](https://www.myvocal.ai/account).
-2. Subscribe to a plan that includes API access.
-3. Copy your API key from Account Info.
+Use a MyVocal account with API access: sign in to [MyVocal Account](https://www.myvocal.ai/account), open
+Account Info and copy your API key. See [Authentication](/api-reference/authentication).
 
 ## Step 2: Get your user info and voices
 
@@ -32,6 +28,8 @@ curl --location 'https://api.myvocal.ai/sound_clone/api/v1/user/info' \
 curl --location 'https://api.myvocal.ai/sound_clone/api/v1/voices' \
 --header 'accessKey: <your_api_key>'
 ```
+
+Use an `id` from the voice list as `voiceId` in the next step. To use your own voice instead, create one first; see [How to use voices](/guides/voice-quickstart).
 
 ## Step 3: Create TTS with the default model path
 
@@ -52,7 +50,23 @@ curl --location 'https://api.myvocal.ai/sound_clone/api/v1/tts' \
 }'
 ```
 
-## Step 4: Create TTS with `myvocal_v3`
+The response body is the audio (normally `Content-Type: audio/mpeg`); add `--output output-default.mp3` to
+save it to a file. HTTP `200` alone does not mean success: if `Content-Type` is JSON, read `code` and
+`message`. See [Create speech](/api-reference/tts/tts) for all fields and errors.
+
+That is the whole shortest path. Everything below is optional.
+
+## Optional branches
+
+| Branch | Use it when |
+|---|---|
+| [Request `myvocal_v3`](#optional-request-myvocal_v3-explicitly) | You want the V3 model instead of the default path. |
+| [Use the Accent model](#optional-use-the-accent-model) | You want `myvocal_v3_accent_enhance` with a compatible voice. |
+| [Query TTS History](#optional-query-tts-history-and-output-urls) | You need earlier records or playable URLs for them. |
+
+<a id="step-4-create-tts-with-myvocal_v3"></a>
+
+## Optional: request `myvocal_v3` explicitly
 
 Set `modelId` to `myvocal_v3` to explicitly request V3.
 
@@ -76,7 +90,11 @@ curl --location 'https://api.myvocal.ai/sound_clone/api/v1/tts' \
 `myvocal_v3` is publicly documented. If your request returns `code = -1`, verify `voiceId`, `language`, account plan, and current backend availability before retrying.
 </Warning>
 
-## Step 5: Discover Accent-compatible voices
+<a id="step-5-discover-accent-compatible-voices"></a>
+
+## Optional: use the Accent model
+
+### Discover Accent-compatible voices
 
 An Accent request must use a voice that is compatible with the Accent model. Ask for that list explicitly and
 pick a returned `id` as the `voiceId` for the next step.
@@ -89,7 +107,9 @@ curl --location 'https://api.myvocal.ai/sound_clone/api/v1/voices?modelId=myvoca
 The list includes your own compatible voices plus the prebuilt voices available to your API key. It is a
 selection aid: a voice appearing in it is not a guarantee that a later generation will succeed.
 
-## Step 6: Create TTS with the Accent model
+<a id="step-6-create-tts-with-the-accent-model"></a>
+
+### Create TTS with the Accent model
 
 Send the same request shape as the default path, with `modelId` set to `myvocal_v3_accent_enhance`. Use
 `--output` to save the returned audio to a file:
@@ -120,7 +140,9 @@ a JSON envelope whose `code` is not a success code. **HTTP `200` alone does not 
 If the connection is interrupted after audio has already started, the transfer simply ends rather than
 appending JSON, so treat a short file as a failed request.
 
-## Step 7: Query history and output URLs
+<a id="step-7-query-history-and-output-urls"></a>
+
+## Optional: query TTS History and output URLs
 
 1. Query TTS list to get generated record IDs.
 2. Query URL endpoint with those IDs to get playable output URLs.
@@ -148,59 +170,34 @@ curl --location 'https://api.myvocal.ai/sound_clone/api/v1/tts/query' \
 }'
 ```
 
+See [TTS History](/api-reference/history/ttsList) for the full reference.
+
 <Card title="See full model details" icon="book" href="/api-reference/tts/models">
   Open TTS Models & Migration for the current public model list and migration guidance.
 </Card>
 
-## Step 8: Create music from a text brief
+<a id="step-8-create-music-from-a-text-brief"></a>
+<a id="step-9-dub-an-audio-or-video-file"></a>
 
-Text-to-Music does not need a voice or a browser session. Send a creative brief with an `Idempotency-Key`, then poll the project.
+## Other products
 
-```bash
-curl --location 'https://api.myvocal.ai/sound_clone/api/v1/music/projects' \
---header 'accessKey: <your_api_key>' \
---header 'Content-Type: application/json' \
---header 'Idempotency-Key: 6f1c1f0e0b8a4d1e' \
---data '{
-  "description": "An upbeat summer pop song about a road trip along the coast.",
-  "genre": "POP",
-  "styleNotes": "Bright synths, driving drums, warm bass.",
-  "moods": ["UPLIFTING", "ENERGETIC"],
-  "vocalLanguage": "en",
-  "durationSec": 90,
-  "lyricsMode": "AUTO",
-  "vocalStyle": "BRIGHT_ENERGETIC"
-}'
-```
-
-The response returns `projectId` and an `ARRANGEMENT` job. When `projectStatus` is `ARRANGEMENT_READY`, request a quote, then generate the song. The complete flow is in the [Text-to-Music quickstart](/guides/music-quickstart).
-
-## Step 9: Dub an audio or video file
-
-Interpretation also uses only the `accessKey` header. Create a project, upload the file with a multipart upload, and let the service probe it.
-
-```bash
-curl --location 'https://api.myvocal.ai/sound_clone/api/v1/interpretation/projects' \
---header 'accessKey: <your_api_key>' \
---header 'Content-Type: application/json' \
---header 'Idempotency-Key: 0d2b7c3a91f54b62' \
---data '{
-  "name": "Launch video ES/FR",
-  "targetLanguages": ["es", "fr"]
-}'
-```
-
-The response returns `projectId` and `settingsVersion`. Quote and generate one target language at a time, then poll until each target is `READY`. The complete flow, including the presigned multipart upload, is in the [Interpretation quickstart](/guides/interpretation-quickstart).
-
-<Info>
-Both products are asynchronous and poll-based; they do not use callbacks. See [Async jobs, polling and retries](/guides/async-jobs-and-retries) and [Characters, quotes and billing](/guides/characters-and-quotes).
-</Info>
+These are separate products with their own quickstarts. They are not steps of this TTS quickstart and do
+not need a voice.
 
 <CardGroup cols={2}>
-  <Card title="Text-to-Music" icon="music" href="/guides/music-quickstart">
+  <Card title="Speech to Text — Real-time" icon="microphone" href="/guides/stt-realtime-quickstart">
+    Stream live audio and receive partial and final transcripts.
+  </Card>
+  <Card title="Speech to Text — Batch" icon="file-audio" href="/guides/stt-batch-quickstart">
+    Transcribe a recording (Batch quickstart).
+  </Card>
+  <Card title="Text to Music" icon="guitar" href="/guides/music-quickstart">
     Brief → arrangement → quote → generate → MP3.
   </Card>
   <Card title="Interpretation" icon="language" href="/guides/interpretation-quickstart">
-    Upload → probe → quote → generate → export.
+    Translate and dub uploaded audio/video: upload → probe → quote → generate → export.
+  </Card>
+  <Card title="AI Cover" icon="music" href="/guides/cover-quickstart">
+    Turn a song into a cover sung by a Cover voice.
   </Card>
 </CardGroup>

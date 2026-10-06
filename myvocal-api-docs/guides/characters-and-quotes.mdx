@@ -1,11 +1,19 @@
 ---
 title: "Characters, quotes and billing"
+sidebarTitle: "Characters & billing"
 description: "How Speech to Text, Text-to-Music and Interpretation use Characters, reservations, settlement and release."
 ---
 
-<Info>
-Text-to-Music and Interpretation consume **Characters**. Nothing is charged by a read call: the cost is always quoted first, then reserved when you accept the quote. Quotes are free.
-</Info>
+Every product on this page is billed in **Characters** from your account balance. The rules differ by
+product, so start with the row for the product you integrate:
+
+| Product | How Characters are charged | Read |
+|---|---|---|
+| Speech to Text | Batch submission prices and reserves in one call; Real-time reserves while recording and settles confirmed audio at finish. There is no separate STT quote endpoint. | [Speech to Text billing](#speech-to-text-billing) |
+| Text to Music, Interpretation | Request a quote first; Characters are reserved when you accept it. | [Always quote, never estimate](#music-and-interpretation-always-quote-never-estimate) and the sections after it |
+| Text to Speech, Voice cloning, AI Cover | Not described on this page. Your plan, Character quotas and usage are returned by [Get account information](/api-reference/user/getInfo). | — |
+
+Rates are per plan. Never hard-code them; read the values the service returns, as described in each section.
 
 ## Speech to Text billing
 
@@ -32,7 +40,16 @@ are numbers. Reads, downloads, notification retries and repeated finish do not c
 See [STT availability](/guides/stt-availability) for current validation and recovery limitations.
 The separate quote endpoints and product-specific rate tables below apply to Music and Interpretation.
 
-## Always quote, never estimate
+<a id="always-quote-never-estimate"></a>
+
+## Music and Interpretation: always quote, never estimate
+
+<Info>
+Text-to-Music and Interpretation consume **Characters**. Nothing is charged by a read call: the cost is always quoted first, then reserved when you accept the quote. Quotes are free.
+</Info>
+
+This section and the rest of this page apply to Text-to-Music and Interpretation only. They do not change
+how Speech to Text prices and reserves at submission.
 
 Both products expose a `capabilities` endpoint and a `quotes` endpoint. Read the rate from `capabilities` and the exact amount from `quotes`.
 

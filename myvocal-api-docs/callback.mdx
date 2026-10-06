@@ -1,5 +1,31 @@
-<p>Some of the API services provided by this product require asynchronous callbacks due to longer processing times.</p>
-<p>To ensure that information is returned normally and accurately, a callback URL needs to be provided in the input parameters.</p>
+---
+title: "Cover callbacks"
+description: "How AI Cover and Cover voice requests deliver their result to your callbackUrl, and which other products use a different mechanism."
+---
+
+<sub>**AI Cover** · Workflow: [AI Cover quickstart](/guides/cover-quickstart)</sub>
+
+This callback protocol applies only to the AI Cover flows that take a `callbackUrl`:
+
+| `webhookType` | Started by |
+|---|---|
+| `TRAIN_COVER_SPEAKER` | [Create a Cover voice](/api-reference/voice/addCoverVoice) |
+| `EDIT_COVER_SPEAKER` | [Improve a Cover voice](/api-reference/voice/editCoverVoice) |
+| `COVER_SONG` | [Generate a cover](/api-reference/cover/cover) |
+
+These requests take longer to process, so the result is delivered asynchronously to the callback URL you
+provide in the request.
+
+<Note>
+Other products do not use this protocol:
+
+- **Speech to Text — Batch:** poll the transcription. The optional completion notification has its own
+  signed (HMAC) contract; see [STT completion notifications](/guides/stt-batch-quickstart#completion-notifications).
+- **Speech to Text — Real-time:** results arrive as WebSocket events on the session's socket. They are not
+  HTTP callbacks; see the [real-time quickstart](/guides/stt-realtime-quickstart).
+- **Text to Music and Interpretation:** poll-based; no callback (see below).
+- **Text to Speech, TTS voices and account information:** the result is in the HTTP response.
+</Note>
 
 ### Request
 <p>Please provide a callback URL and ensure that the callback URL provided is consistent across different scenarios.</p>
@@ -12,14 +38,14 @@
 When an asynchronous request is sent successfully, we will immediately provide a webhookId. When a callback is made, this webhookId will also be included in the callback URL. You can use the webhookId to associate the request with the callback.
 
 <ResponseField name="webhookId" type="string">
-  When the request is successfully sent, a webhoodId will be synchronously returned. The same information will also be called back in the callbackUrl, which is used to correlate the request and the response.
+  When the request is successfully sent, a webhookId will be synchronously returned. The same information will also be called back in the callbackUrl, which is used to correlate the request and the response.
 </ResponseField>
 
 <ResponseField name="webhookType" type="string" >
 <div><b>TRAIN_COVER_SPEAKER</b>: Add an AI Cover Voice</div>
 
 <div><b>EDIT_COVER_SPEAKER</b>: Improve an AI Cover Voice</div>
-<div><b>COVER_SONG</b>: Create AI Cover Voice</div>
+<div><b>COVER_SONG</b>: Create an AI Cover song</div>
 
 </ResponseField>
 
@@ -31,6 +57,10 @@ The status of this request
 
 </ResponseField>
 
+
+<ResponseField name="summary" type="string">
+  Human-readable result summary.
+</ResponseField>
 
 <ResponseField name="data" type="Object" >
   business data
@@ -53,7 +83,8 @@ The status of this request
     "webhookType":"TRAIN_COVER_SPEAKER",    
     "status":"FAILURE",  
     "summary":"Clone training failed."
-}```
+}
+```
 
 ## Text-to-Music and Interpretation
 

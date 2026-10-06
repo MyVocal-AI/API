@@ -22,21 +22,49 @@
     "name": "Home Page",
     "url": "https://www.myvocal.ai"
   },
-  "anchors": [
+  "topbarLinks": [
     {
       "name": "API Reference",
-      "icon": "rectangle-terminal",
-      "url": "api-reference"
+      "url": "/api-reference/overview"
     }
   ],
   "navigation": [
     {
-      "group": "",
+      "group": "Getting started",
       "pages": [
         "introduction",
-        "quickstart",
+        "guides/get-started",
         "api-reference/authentication",
-        "callback"
+        "api-reference/user/getInfo",
+        "api-reference/overview"
+      ]
+    },
+    {
+      "group": "Text to Speech",
+      "pages": [
+        "quickstart",
+        {
+          "group": "Models & languages",
+          "pages": [
+            "api-reference/tts/models",
+            "api-reference/tts/v3-language-codes"
+          ]
+        },
+        {
+          "group": "TTS API reference",
+          "pages": [
+            "api-reference/tts/tts",
+            "api-reference/tts/ttsStream"
+          ]
+        },
+        {
+          "group": "TTS History",
+          "pages": [
+            "api-reference/history/ttsList",
+            "api-reference/history/ttsListUrl",
+            "api-reference/history/deleteTTS"
+          ]
+        }
       ]
     },
     {
@@ -44,135 +72,235 @@
       "pages": [
         "guides/stt-batch-quickstart",
         "guides/stt-realtime-quickstart",
-        "guides/stt-availability",
-        "api-reference/stt/capabilities",
-        "api-reference/stt/createUpload",
-        "api-reference/stt/signUploadPart",
-        "api-reference/stt/completeUpload",
-        "api-reference/stt/getUpload",
-        "api-reference/stt/createTranscription",
-        "api-reference/stt/getTranscription",
-        "api-reference/stt/listTranscriptions",
-        "api-reference/stt/downloadTranscription",
-        "api-reference/stt/deleteTranscription",
-        "api-reference/stt/createSession",
-        "api-reference/stt/getSession",
-        "api-reference/stt/pauseSession",
-        "api-reference/stt/resumeSession",
-        "api-reference/stt/finishSession",
-        "api-reference/stt/createTicket"
+        {
+          "group": "Real-time SDKs",
+          "pages": [
+            "sdks/stt-realtime/overview",
+            "sdks/stt-realtime/python",
+            "sdks/stt-realtime/java",
+            "sdks/stt-realtime/go",
+            "sdks/stt-realtime/behavior"
+          ]
+        },
+        {
+          "group": "STT API reference",
+          "pages": [
+            "api-reference/stt/capabilities",
+            {
+              "group": "Batch uploads",
+              "pages": [
+                "api-reference/stt/createUpload",
+                "api-reference/stt/signUploadPart",
+                "api-reference/stt/completeUpload",
+                "api-reference/stt/getUpload"
+              ]
+            },
+            {
+              "group": "Batch transcriptions",
+              "pages": [
+                "api-reference/stt/createTranscription",
+                "api-reference/stt/getTranscription",
+                "api-reference/stt/listTranscriptions",
+                "api-reference/stt/downloadTranscription",
+                "api-reference/stt/deleteTranscription"
+              ]
+            },
+            {
+              "group": "Real-time sessions",
+              "pages": [
+                "api-reference/stt/createSession",
+                "api-reference/stt/getSession",
+                "api-reference/stt/pauseSession",
+                "api-reference/stt/resumeSession",
+                "api-reference/stt/finishSession",
+                "api-reference/stt/createTicket"
+              ]
+            }
+          ]
+        },
+        "guides/stt-availability"
       ]
     },
     {
-      "group": "Speech to Text SDKs",
+      "group": "Voice cloning",
       "pages": [
-        "sdks/stt-realtime/overview",
-        "sdks/stt-realtime/behavior",
-        "sdks/stt-realtime/java",
-        "sdks/stt-realtime/go",
-        "sdks/stt-realtime/python"
-      ]
-    },
-    {
-      "group": "Guides",
-      "pages": [
-        "guides/music-quickstart",
-        "guides/interpretation-quickstart",
-        "guides/async-jobs-and-retries",
-        "guides/characters-and-quotes"
-      ]
-    },
-    {
-      "group": "Text-to-Speech",
-      "pages": [
-        "api-reference/tts/models",
-        "api-reference/tts/v3-language-codes",
-        "api-reference/tts/tts",
-        "api-reference/tts/ttsStream"
-      ]
-    },
-    {
-      "group": "Voice",
-      "pages": [
-        "api-reference/voice/addTTSVoice",
-        "api-reference/voice/editTTSVoice",
-        "api-reference/voice/addCoverVoice",
-        "api-reference/voice/editCoverVoice",
-        "api-reference/voice/list",
-        "api-reference/voice/updateVoiceName",
-        "api-reference/voice/delete"
+        "guides/voice-quickstart",
+        {
+          "group": "Voice API reference",
+          "pages": [
+            "api-reference/voice/addTTSVoice",
+            "api-reference/voice/addCoverVoice",
+            "api-reference/voice/editTTSVoice",
+            "api-reference/voice/editCoverVoice",
+            "api-reference/voice/list",
+            "api-reference/voice/updateVoiceName",
+            "api-reference/voice/delete"
+          ]
+        }
       ]
     },
     {
       "group": "AI Cover",
       "pages": [
-        "api-reference/cover/cover"
+        "guides/cover-quickstart",
+        "api-reference/cover/cover",
+        "callback",
+        {
+          "group": "Cover History",
+          "pages": [
+            "api-reference/history/coverList",
+            "api-reference/history/coverListUrl",
+            "api-reference/history/deleteCover"
+          ]
+        }
       ]
     },
     {
-      "group": "Text-to-Music",
+      "group": "Text to Music",
       "pages": [
-        "api-reference/music/capabilities",
-        "api-reference/music/createProject",
-        "api-reference/music/getProject",
-        "api-reference/music/listProjects",
-        "api-reference/music/getJob",
-        "api-reference/music/updateBrief",
-        "api-reference/music/updateArrangement",
-        "api-reference/music/regenerateArrangement",
-        "api-reference/music/createQuote",
-        "api-reference/music/createGeneration",
-        "api-reference/music/createVersion",
-        "api-reference/music/playbackUrl",
-        "api-reference/music/download",
-        "api-reference/music/renameProject",
-        "api-reference/music/deleteProject"
+        "guides/music-quickstart",
+        {
+          "group": "Music API reference",
+          "pages": [
+            "api-reference/music/capabilities",
+            {
+              "group": "Create and generate",
+              "pages": [
+                "api-reference/music/createProject",
+                "api-reference/music/getJob",
+                "api-reference/music/getProject",
+                "api-reference/music/updateBrief",
+                "api-reference/music/updateArrangement",
+                "api-reference/music/regenerateArrangement",
+                "api-reference/music/createQuote",
+                "api-reference/music/createGeneration",
+                "api-reference/music/playbackUrl",
+                "api-reference/music/download"
+              ]
+            },
+            {
+              "group": "Manage projects",
+              "pages": [
+                "api-reference/music/listProjects",
+                "api-reference/music/createVersion",
+                "api-reference/music/renameProject",
+                "api-reference/music/deleteProject"
+              ]
+            }
+          ]
+        }
       ]
     },
     {
       "group": "Interpretation",
       "pages": [
-        "api-reference/interpretation/capabilities",
-        "api-reference/interpretation/createProject",
-        "api-reference/interpretation/getProject",
-        "api-reference/interpretation/listProjects",
-        "api-reference/interpretation/patchDraft",
-        "api-reference/interpretation/deleteSource",
-        "api-reference/interpretation/renameProject",
-        "api-reference/interpretation/deleteProject",
-        "api-reference/interpretation/createQuote",
-        "api-reference/interpretation/createGeneration",
-        "api-reference/interpretation/retryPlan",
-        "api-reference/interpretation/retryTarget",
-        "api-reference/interpretation/getJob",
-        "api-reference/interpretation/createUpload",
-        "api-reference/interpretation/signUploadPart",
-        "api-reference/interpretation/getUpload",
-        "api-reference/interpretation/completeUpload",
-        "api-reference/interpretation/playback",
-        "api-reference/interpretation/createExport",
-        "api-reference/interpretation/downloadExport"
+        "guides/interpretation-quickstart",
+        {
+          "group": "Interpretation API reference",
+          "pages": [
+            "api-reference/interpretation/capabilities",
+            {
+              "group": "Upload the source",
+              "pages": [
+                "api-reference/interpretation/createUpload",
+                "api-reference/interpretation/signUploadPart",
+                "api-reference/interpretation/completeUpload",
+                "api-reference/interpretation/getUpload",
+                "api-reference/interpretation/deleteSource"
+              ]
+            },
+            {
+              "group": "Quote and generate",
+              "pages": [
+                "api-reference/interpretation/patchDraft",
+                "api-reference/interpretation/createQuote",
+                "api-reference/interpretation/createGeneration",
+                "api-reference/interpretation/getJob",
+                "api-reference/interpretation/retryPlan",
+                "api-reference/interpretation/retryTarget"
+              ]
+            },
+            {
+              "group": "Results and export",
+              "pages": [
+                "api-reference/interpretation/playback",
+                "api-reference/interpretation/createExport",
+                "api-reference/interpretation/downloadExport"
+              ]
+            },
+            {
+              "group": "Manage projects",
+              "pages": [
+                "api-reference/interpretation/createProject",
+                "api-reference/interpretation/getProject",
+                "api-reference/interpretation/listProjects",
+                "api-reference/interpretation/renameProject",
+                "api-reference/interpretation/deleteProject"
+              ]
+            }
+          ]
+        }
       ]
     },
     {
-      "group": "History",
+      "group": "Integration concepts",
       "pages": [
-        "api-reference/history/ttsList",
-        "api-reference/history/ttsListUrl",
-        "api-reference/history/deleteTTS",
-        "api-reference/history/coverList",
-        "api-reference/history/coverListUrl",
-        "api-reference/history/deleteCover"
-      ]
-    },
-    {
-      "group": "User",
-      "pages": [
-        "api-reference/user/getInfo"
+        "guides/characters-and-quotes",
+        "guides/async-jobs-and-retries"
       ]
     }
   ],
   "footerSocials": {
     "youtube": "https://www.youtube.com/@myvocalai"
-  }
+  },
+  "redirects": [
+    {
+      "source": "/api-reference",
+      "destination": "/api-reference/overview"
+    },
+    {
+      "source": "/api-reference/introduction/introduction",
+      "destination": "/api-reference/overview"
+    },
+    {
+      "source": "/api-reference/endpoint/get",
+      "destination": "/api-reference/overview"
+    },
+    {
+      "source": "/api-reference/endpoint/create",
+      "destination": "/api-reference/overview"
+    },
+    {
+      "source": "/api-reference/endpoint/update",
+      "destination": "/api-reference/overview"
+    },
+    {
+      "source": "/api-reference/endpoint/delete",
+      "destination": "/api-reference/overview"
+    },
+    {
+      "source": "/development",
+      "destination": "/introduction"
+    },
+    {
+      "source": "/essentials/code",
+      "destination": "/introduction"
+    },
+    {
+      "source": "/essentials/images",
+      "destination": "/introduction"
+    },
+    {
+      "source": "/essentials/markdown",
+      "destination": "/introduction"
+    },
+    {
+      "source": "/essentials/navigation",
+      "destination": "/introduction"
+    },
+    {
+      "source": "/essentials/settings",
+      "destination": "/introduction"
+    }
+  ]
 }

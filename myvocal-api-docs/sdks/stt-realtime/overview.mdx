@@ -1,12 +1,12 @@
 ---
 title: "Real-time SDKs — install"
-description: "Server-side Java, Go and Python SDKs for the MyVocal Speech to Text real-time API."
+sidebarTitle: "Install"
+description: "Install the server-side Java, Go and Python SDKs for the MyVocal Speech to Text real-time API."
 ---
 
-The real-time SDKs wrap the [real-time API](/guides/stt-realtime-quickstart) for server-side code. You
-configure a session, hand it audio, consume events and call `finish`. The SDK frames audio (about
-100 ms per frame), tracks sample cursors, follows in-connection rotation and ends the session for you.
-They use the same API key, Characters balance and History as the REST API.
+Server-side SDKs for the [Speech to Text real-time API](/guides/stt-realtime-quickstart). They are optional:
+any language can call the REST and WebSocket API directly. They use the same API key, Characters balance
+and History as the REST API.
 
 | Language | Package | Runtime |
 |---|---|---|
@@ -22,17 +22,11 @@ The SDKs themselves always connect with the access key.
 
 ## Install
 
-Source code, release notes and checksums: [GitHub Release v1.0.0](https://github.com/MyVocal-AI/myvocal-stt-realtime-sdks/releases/tag/v1.0.0) of
+Install 1.0.0 with the command for your language. Go is served by the Go module proxy (tag `go/v1.0.0`).
+Python (wheel and sdist) and Java (JAR, sources, Javadoc and POM) are distributed as files on the
+[GitHub Release v1.0.0](https://github.com/MyVocal-AI/myvocal-stt-realtime-sdks/releases/tag/v1.0.0),
+together with release notes and `SHA256SUMS`. Source code:
 [MyVocal-AI/myvocal-stt-realtime-sdks](https://github.com/MyVocal-AI/myvocal-stt-realtime-sdks) (Apache License 2.0).
-
-| Language | Where 1.0.0 is available now | Package registry |
-|---|---|---|
-| Go | Go module proxy (tag `go/v1.0.0`) | Available: `go get` below |
-| Python | Wheel and sdist on the GitHub Release | Not yet on PyPI |
-| Java | JAR, sources, Javadoc and POM on the GitHub Release | Not yet on Maven Central |
-
-This page will be updated when the PyPI and Maven Central listings are live. Until then, use the
-commands below; they install the same 1.0.0 files.
 
 <CodeGroup>
 
@@ -69,13 +63,21 @@ For Java, after installing the files into your local Maven repository, add the d
 
 Set `MYVOCAL_ACCESS_KEY` in the server environment. The default endpoint is `https://api.myvocal.ai`.
 
-## Next steps
+<a id="next-steps"></a>
+
+## Send your first audio
+
+Each language page starts with a complete example that streams a file and prints the transcript:
 
 <CardGroup cols={3}>
-  <Card title="Java quickstart" icon="java" href="/sdks/stt-realtime/java">Blocking calls, `CompletableFuture` and listeners.</Card>
-  <Card title="Go quickstart" icon="golang" href="/sdks/stt-realtime/go">`context.Context`, typed events and errors.</Card>
-  <Card title="Python quickstart" icon="python" href="/sdks/stt-realtime/python">Blocking and `asyncio` clients.</Card>
+  <Card title="Python" icon="python" href="/sdks/stt-realtime/python">Blocking and `asyncio` clients.</Card>
+  <Card title="Java" icon="java" href="/sdks/stt-realtime/java">Blocking calls, `CompletableFuture` and listeners.</Card>
+  <Card title="Go" icon="golang" href="/sdks/stt-realtime/go">`context.Context`, typed events and errors.</Card>
 </CardGroup>
 
-Read the [SDK behaviour guide](/sdks/stt-realtime/behavior) for `finish` vs `close`, disconnects,
-pause and resume, events and errors. It applies to all three SDKs.
+## Lifecycle, disconnects and errors
+
+The SDK frames audio (about 100 ms per frame), tracks sample cursors, follows in-connection rotation and
+ends the session when you call `finish`. The [behavior guide](/sdks/stt-realtime/behavior) covers `finish`
+vs `close`, disconnects, pause and resume, events, errors and observed service behavior. It applies to all
+three SDKs.

@@ -4,12 +4,14 @@ api: "POST https://api.myvocal.ai/sound_clone/api/v1/music/projects/{projectId}/
 description: "Ask the service for a new arrangement for the current brief."
 ---
 
+<sub>**Text to Music** · Workflow: [Text-to-Music quickstart](/guides/music-quickstart) · Polling: [Async jobs and retries](/guides/async-jobs-and-retries)</sub>
+
 Queues a new `ARRANGEMENT` job for the project's current brief. Use this when you would rather get a fresh arrangement than edit the existing one.
 
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 <ParamField header="Idempotency-Key" type="string" required>

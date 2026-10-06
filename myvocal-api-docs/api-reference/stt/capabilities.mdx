@@ -4,13 +4,15 @@ api: "GET https://api.myvocal.ai/sound_clone/api/v1/stt/capabilities"
 description: "Read the account state, rate, models and accepted option values for Batch and real-time."
 ---
 
+<sub>**Speech to Text** · Workflows: [Batch quickstart](/guides/stt-batch-quickstart) · [Real-time quickstart](/guides/stt-realtime-quickstart) · [Real-time SDKs](/sdks/stt-realtime/overview)</sub>
+
 Read this endpoint first. It reports what the account may do and which option values the write
 endpoints accept, in MyVocal field names.
 
 ### Header
 
 <ParamField header="accessKey" type="string" required>
-  API key for authentication.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 
 ### Response

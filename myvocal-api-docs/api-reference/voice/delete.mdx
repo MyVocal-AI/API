@@ -1,11 +1,14 @@
 ---
-title: "Delete Voice"
+title: "Delete a voice"
 api: "DELETE https://api.myvocal.ai/sound_clone/api/v1/voices/{id}"
-description: "Delete a custom voice by voiceId."
+description: "Delete a custom voice by its voiceId."
 ---
+
+<sub>**Voice cloning** · Workflow: [How to use voices](/guides/voice-quickstart)</sub>
+
 ### Header
 <ParamField header="accessKey"   type="string" required>
-  You can copy your api-key on https://www.myvocal.ai/profile after you have subscribed to Pro or Business Plan.
+  Your API key. See [Authentication](/api-reference/authentication).
 </ParamField>
 ### Path
 <ParamField path="id"   type="string" required>

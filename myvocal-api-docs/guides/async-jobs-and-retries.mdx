@@ -1,11 +1,21 @@
 ---
 title: "Async jobs, polling and retries"
-description: "How Text-to-Music and Interpretation report progress, and how to poll, time out and recover safely."
+sidebarTitle: "Async jobs, polling & retries"
+description: "For Text-to-Music and Interpretation: how jobs report progress, and how to poll, time out and recover safely."
 ---
 
 <Info>
-Text-to-Music and Interpretation are asynchronous and **poll-based**. A create call returns identifiers immediately; you then poll the project or job endpoints until the resource reaches a terminal state. Neither product uses callbacks or webhooks — that mechanism belongs to the AI Cover flows described in [Callback](/callback).
+**Applies to Text-to-Music and Interpretation.** Both are asynchronous and **poll-based**: a create call returns identifiers immediately; you then poll the project or job endpoints until the resource reaches a terminal state. Neither product uses callbacks or webhooks.
 </Info>
+
+Other products report asynchronous results differently:
+
+| Product | Mechanism | Where it is described |
+|---|---|---|
+| Text to Music, Interpretation | Poll the project/job | This page |
+| Speech to Text — Batch | Poll the transcription; optional signed completion notification | [Batch quickstart](/guides/stt-batch-quickstart#completion-notifications) |
+| Speech to Text — Real-time | WebSocket events on the session, then `finish` | [Real-time quickstart](/guides/stt-realtime-quickstart) |
+| AI Cover, Cover voice creation and improvement | Callback to your `callbackUrl` | [Cover callbacks](/callback) |
 
 ## The shape of an async call
 
