@@ -17,7 +17,7 @@ The three SDKs behave the same way; only the naming follows each language.
 5. `finish` sends the remaining audio, waits until every sample is acknowledged, ends the session and
    returns the result: `status` (`COMPLETED`, `PARTIAL` or `FAILED`, exactly as the service reports it),
    `transcriptionId`, `usage`, `notices` and the lines.
-6. `close` releases local resources.
+6. `close` releases all local resources.
 
 ## finish and close are different
 
@@ -25,7 +25,8 @@ The three SDKs behave the same way; only the naming follows each language.
 |---|---|---|
 | Ends the session | Yes. Repeated calls return the same result | No. An unfinished session is paused when its connection goes away |
 | Settles Characters | Yes, by the service | No |
-| Releases sockets and threads | Yes | Yes |
+| Returns the result | Yes | No |
+| Releases local resources | Closes the session's connection only | Yes, completely: connection, threads and tasks, event queues; the client stops holding the session |
 
 Call `finish`, then `close` (for example in a `finally` block). Every wait has a configurable timeout,
 so this never hangs.
@@ -51,7 +52,9 @@ time, the SDK:
 
 1. stops accepting audio (further input raises a connection-lost error);
 2. reads the original session over REST and returns it if it has already ended;
-3. otherwise finishes it over REST (idempotent) within the close-out timeout;
+3. otherwise finishes it over REST (idempotent) within the close-out timeout. That timeout is one budget
+   for the whole close-out: every REST read, finish and retry wait gets only the time that is left, and
+   nothing new starts once it is used up;
 4. returns the real result, marked `viaRest` with a `closeoutReason` (`DISCONNECTED`, `ACK_TIMEOUT`, `FINISH_TIMEOUT`).
 
 If REST cannot be reached, you get a *finish unconfirmed* error with the `sessionId`. Call
@@ -68,12 +71,27 @@ starts again at 0 and `capturedSamples` keeps counting. Both work over the WebSo
 
 - The SDK holds at most 30 seconds (configurable) of audio that has not been acknowledged yet. When it
   is full, `sendAudio` waits; without acknowledgement progress it raises a back-pressure error. Audio is
-  never dropped silently.
-- Handlers run off the network path, so a slow handler never delays acknowledgements. Handler errors go
-  to the callback-error hook and are counted; they are never reported as service failures. If the
-  bounded handler queue overflows, each undelivered event is reported, and the final result still has
-  every line.
+  never dropped silently. `sendFile` reads the file frame by frame as the buffer has room, so memory does
+  not grow with the file size.
+- Handlers and event iteration run off the network path and use bounded queues (configurable size), so a
+  slow consumer never delays acknowledgements. Handler errors go to the callback-error hook and are
+  counted; they are never reported as service failures. If a queue overflows, no event is dropped
+  silently: each undelivered event is counted and reported to the callback-error hook, and the final
+  result still has every line.
 - Operations on one session run one at a time. Different sessions are independent.
+
+## Observed service behaviour
+
+These were seen in real-API testing; the root cause is not confirmed. The SDKs report them exactly as
+the service returns them. Read `status`, `notices` and `usage` of the result; the service's final state
+is authoritative.
+
+- **Long idle.** After an audio gap of about 75 seconds or more, the service may stop acknowledging
+  further audio. The SDK then closes the session out after the acknowledgement timeout, and the session
+  may end `PARTIAL`. The WebSocket ping keeps the connection open, but it does not guarantee that the
+  session keeps processing audio.
+- **Manual segment mode.** In manual mode the service may return `PARTIAL` even when all audio was
+  received (the receipt counters show every sample). Manual mode remains supported.
 
 ## Blocking and asynchronous calls
 
