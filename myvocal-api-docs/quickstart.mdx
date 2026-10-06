@@ -181,8 +181,11 @@ See [TTS History](/api-reference/history/ttsList) for the full reference.
 
 ## Other products
 
-These are separate products with their own quickstarts. They are not steps of this TTS quickstart and do
-not need a voice.
+These are separate products with their own quickstarts; they are not steps of this TTS quickstart.
+Speech to Text, Text to Music and Interpretation do not need a `voiceId`. AI Cover does:
+[Generate a cover](/api-reference/cover/cover) requires the `voiceId` of a compatible Cover voice (your
+custom voice's id or a premade voice's id). See [How to use voices](/guides/voice-quickstart) to find or
+create one.
 
 <CardGroup cols={2}>
   <Card title="Speech to Text — Real-time" icon="microphone" href="/guides/stt-realtime-quickstart">
