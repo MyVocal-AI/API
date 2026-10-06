@@ -1,0 +1,95 @@
+---
+title: "Real-time SDK — Go"
+description: "Stream audio to MyVocal Speech to Text from Go 1.22+ with package sttrealtime."
+---
+
+```bash
+go get github.com/MyVocal-AI/myvocal-stt-realtime-sdks/go@v1.0.0
+```
+
+Go 1.22 or later. Dependency: `github.com/gorilla/websocket`. Served by the Go module proxy from the
+`go/v1.0.0` tag of [MyVocal-AI/myvocal-stt-realtime-sdks](https://github.com/MyVocal-AI/myvocal-stt-realtime-sdks).
+
+## Stream a file
+
+```go
+import sttrealtime "github.com/MyVocal-AI/myvocal-stt-realtime-sdks/go"
+
+client, err := sttrealtime.NewClient(sttrealtime.Config{AccessKey: os.Getenv("MYVOCAL_ACCESS_KEY")})
+if err != nil { log.Fatal(err) }
+defer client.Close()
+
+ctx := context.Background()
+session, err := client.Connect(ctx, sttrealtime.ConnectOptions{
+    Request: &sttrealtime.SessionRequest{Title: "meeting", LanguageHint: "en",
+        Options: &sttrealtime.SessionOptions{InputEncoding: "pcm_s16le_16000", SegmentCommitMode: "vad"}},
+    Handlers: map[string]func(sttrealtime.Event){
+        sttrealtime.EventTranscriptFinal: func(e sttrealtime.Event) { fmt.Println("final:", e.Text()) },
+    },
+})
+if err != nil { log.Fatal(err) }
+defer session.Close()                                    // local resources only
+
+if err := session.SendFile(ctx, "speech.wav", true); err != nil { log.Fatal(err) } // paced
+result, err := session.Finish(ctx)
+if err != nil { log.Fatal(err) }
+fmt.Println(result.Status, result.TranscriptionID)
+```
+
+Every call takes a `context.Context`; cancel it to stop waiting. Optional booleans and numbers use
+`sttrealtime.Bool`, `Int` and `Float`, so `false` and `0` are sent as given and `nil` is omitted.
+
+## Byte chunks and events
+
+```go
+session, err := client.Connect(ctx, sttrealtime.ConnectOptions{Request: req, EventChannel: true,
+    OnCallbackError: func(err error, e sttrealtime.Event) { log.Println("handler failed on", e.Type) }})
+go func() {
+    for e := range session.Events() { /* typed: e.Type, e.Text(), e.Usage(), e.Notice() ... */ }
+}()
+for chunk := range captured {                            // any size; not paced again
+    if err := session.SendAudio(ctx, chunk); err != nil { break }
+}
+result, err := session.Finish(ctx)
+```
+
+## Commit, pause and resume
+
+```go
+err = session.Commit(ctx)                        // line boundary; same epoch
+err = session.Pause(ctx, sttrealtime.ViaWS)      // or ViaREST
+err = session.Resume(ctx, sttrealtime.ViaREST)   // new epoch
+```
+
+## After a disconnect
+
+```go
+result, err := session.Finish(ctx)
+var unconfirmed *sttrealtime.FinishUnconfirmedError
+switch {
+case err == nil && result.ViaREST:
+    log.Println("closed out:", result.Status, result.CloseoutReason)
+case errors.As(err, &unconfirmed):
+    view, gerr := client.GetSession(ctx, unconfirmed.SessionID)   // later
+    if gerr == nil && !view.IsTerminal() { view, gerr = client.FinishSession(ctx, unconfirmed.SessionID, nil) }
+}
+```
+
+## Config
+
+| Field | Default | Meaning |
+|---|---|---|
+| `BaseURL` | `https://api.myvocal.ai` | `http`/`https`; the stream uses `ws`/`wss` |
+| `Timeouts` | see [behaviour guide](/sdks/stt-realtime/behavior#timeouts) | zero fields use defaults |
+| `FrameMs`, `MaxBufferedMs` | 100, 30000 | frame size and the bound of unacknowledged audio |
+| `PingInterval` | 20 s | client WebSocket ping |
+| `EventQueueSize` | 10000 | bound of events waiting for handlers |
+| `HTTPClient`, `Proxy` (`NoProxy`, `ProxyURL`), `TLSConfig` | environment proxy, system roots | a borrowed client is never closed |
+| `DisableCloseoutOnDisconnect` | `false` | turn off the automatic REST close-out after an unexpected disconnect (`Finish` still closes out) |
+
+## Errors
+
+Use `errors.Is` with `ErrInputInvalid`, `ErrAuthentication`, `ErrInsufficientCharacters`,
+`ErrNotFound`, `ErrIdempotencyConflict`, and `errors.As` with `*APIError` (`Code`, `ErrorCode`,
+`Retryable`, `RequestID`), `*AudioFormatError`, `*SessionStateError`, `*ConnectionLostError`,
+`*BackpressureTimeoutError`, `*FinishUnconfirmedError` (`SessionID`) and `*TransportError`.

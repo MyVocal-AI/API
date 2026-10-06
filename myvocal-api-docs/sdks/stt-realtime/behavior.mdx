@@ -1,0 +1,125 @@
+---
+title: "Real-time SDKs — behaviour guide"
+description: "How the Java, Go and Python real-time SDKs frame audio, end sessions, handle disconnects and report results."
+---
+
+The three SDKs behave the same way; only the naming follows each language.
+
+## The normal path
+
+1. Create one client per application with your access key.
+2. `connect` with a session request (`title`, `languageHint`, `options`). Register event handlers here,
+   before any event can arrive.
+3. Send audio: a file (`sendFile`, paced by sample time), a stream, or byte chunks of any size
+   (`sendAudio`). The SDK builds frames of about 100 ms and joins half PCM samples across calls. A live
+   source that already arrives at capture speed is not paced again.
+4. Optional: `commit` closes the current line and keeps recording; `pause` and `resume` start a new epoch.
+5. `finish` sends the remaining audio, waits until every sample is acknowledged, ends the session and
+   returns the result: `status` (`COMPLETED`, `PARTIAL` or `FAILED`, exactly as the service reports it),
+   `transcriptionId`, `usage`, `notices` and the lines.
+6. `close` releases all local resources.
+
+## finish and close are different
+
+| | `finish` | `close` |
+|---|---|---|
+| Ends the session | Yes. Repeated calls return the same result | No. An unfinished session is paused when its connection goes away |
+| Settles Characters | Yes, by the service | No |
+| Returns the result | Yes | No |
+| Releases local resources | Closes the session's connection only | Yes, completely: connection, threads and tasks, event queues; the client stops holding the session |
+
+Call `finish`, then `close` (for example in a `finally` block). Every wait has a configurable timeout,
+so this never hangs.
+
+## Acknowledgements are not billing
+
+`usage.updated` reports transport receipt (`sentSamples`, `receivedSamples`). The amount charged is the
+service's `billableCharacters` in the final result and in History. The SDKs never compute prices.
+
+## Empty results and missing results
+
+- Entities `null` / `None` / `nil`: the entities result has not arrived.
+- An empty list with `entitiesArrived = true`: it arrived and is empty. This is a valid result.
+- A supplement that never arrives is reported as a `SUPPLEMENT_NOT_RECEIVED` notice naming the line and
+  the kind. The SDKs never guess from silence, and never change a `COMPLETED` session to `FAILED`
+  because a supplement is missing.
+
+## Disconnects and timeouts
+
+The SDKs do not reconnect or resend audio after a network failure. When the connection drops, when
+acknowledgements stop while audio is outstanding, or when the completion event does not arrive in
+time, the SDK:
+
+1. stops accepting audio (further input raises a connection-lost error);
+2. reads the original session over REST and returns it if it has already ended;
+3. otherwise finishes it over REST (idempotent) within the close-out timeout. That timeout is one budget
+   for the whole close-out: every REST read, finish and retry wait gets only the time that is left, and
+   nothing new starts once it is used up;
+4. returns the real result, marked `viaRest` with a `closeoutReason` (`DISCONNECTED`, `ACK_TIMEOUT`, `FINISH_TIMEOUT`).
+
+If REST cannot be reached, you get a *finish unconfirmed* error with the `sessionId`. Call
+`getSession` or `finishSession` later. Audio the service never acknowledged is not treated as
+received, and no new session is created. Recovery across processes or servers is not provided.
+
+## Pause and resume
+
+`pause` sends and confirms buffered audio, then closes the current epoch. Sending audio while paused is
+a state error, so the paused time is never sent as audio. `resume` opens a new epoch: `sampleOffset`
+starts again at 0 and `capturedSamples` keeps counting. Both work over the WebSocket or REST.
+
+## Buffering, callbacks and concurrency
+
+- The SDK holds at most 30 seconds (configurable) of audio that has not been acknowledged yet. When it
+  is full, `sendAudio` waits; without acknowledgement progress it raises a back-pressure error. Audio is
+  never dropped silently. `sendFile` reads the file frame by frame as the buffer has room, so memory does
+  not grow with the file size.
+- Handlers and event iteration run off the network path and use bounded queues (configurable size), so a
+  slow consumer never delays acknowledgements. Handler errors go to the callback-error hook and are
+  counted; they are never reported as service failures. If a queue overflows, no event is dropped
+  silently: each undelivered event is counted and reported to the callback-error hook, and the final
+  result still has every line.
+- Operations on one session run one at a time. Different sessions are independent.
+
+## Observed service behaviour
+
+These were seen in real-API testing; the root cause is not confirmed. The SDKs report them exactly as
+the service returns them. Read `status`, `notices` and `usage` of the result; the service's final state
+is authoritative.
+
+- **Long idle.** After an audio gap of about 75 seconds or more, the service may stop acknowledging
+  further audio. The SDK then closes the session out after the acknowledgement timeout, and the session
+  may end `PARTIAL`. The WebSocket ping keeps the connection open, but it does not guarantee that the
+  session keeps processing audio.
+- **Manual segment mode.** In manual mode the service may return `PARTIAL` even when all audio was
+  received (the receipt counters show every sample). Manual mode remains supported.
+
+## Blocking and asynchronous calls
+
+| Language | Blocking | Asynchronous |
+|---|---|---|
+| Java | `connect`, `finish` | `connectAsync`, `finishAsync` (`CompletableFuture`; `cancel(true)` interrupts the wait), `RealtimeListener` |
+| Go | every call takes a `context.Context`; cancel it to stop waiting | handlers, `OnEvent` or `EventChannel` |
+| Python | `RealtimeClient` | `AsyncRealtimeClient` (`await`), handlers or event iteration |
+
+## Network and security
+
+- The access key travels only in the `accessKey` header, never in a URL.
+- TLS verification is always on. You can add a private CA and set an explicit proxy. An HTTP client
+  you pass in is never closed by the SDK.
+- The client sends a WebSocket ping every 20 seconds to keep idle connections open. Pings are not audio
+  and are unrelated to the `heartbeatIntervalMs` option.
+- The SDKs never log audio, transcript text, keys, tickets or authentication headers.
+
+## Timeouts
+
+Defaults: request 30 s, create 30 s (with idempotent retries), connect 15 s, acknowledgement 10 s
+(counted only while audio is unacknowledged), finish 60 s, close-out 70 s, close 5 s. These are client
+settings, not service latency guarantees.
+
+## Audio input
+
+Encodings: `pcm_s16le_8000`, `pcm_s16le_16000`, `pcm_s16le_22050`, `pcm_s16le_24000`,
+`pcm_s16le_44100`, `pcm_s16le_48000` (signed 16-bit little-endian mono) and `mulaw_8000`. The SDKs read
+WAV headers and reject a WAV whose format differs from the session encoding. Convert MP3, URLs or
+microphone input outside the SDK, for example with FFmpeg; the packages have no FFmpeg or sound-card
+dependency.

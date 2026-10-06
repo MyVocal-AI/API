@@ -1,0 +1,120 @@
+---
+title: "Real-time SDK — Java"
+description: "Stream audio to MyVocal Speech to Text from Java 8+ with ai.myvocal:myvocal-stt-realtime."
+---
+
+`ai.myvocal:myvocal-stt-realtime:1.0.0` is not yet on Maven Central. Install the 1.0.0 files from the
+[GitHub Release](https://github.com/MyVocal-AI/myvocal-stt-realtime-sdks/releases/tag/v1.0.0) into your local Maven repository:
+
+```bash
+base=https://github.com/MyVocal-AI/myvocal-stt-realtime-sdks/releases/download/v1.0.0
+for f in myvocal-stt-realtime-1.0.0.jar myvocal-stt-realtime-1.0.0-sources.jar \
+         myvocal-stt-realtime-1.0.0-javadoc.jar myvocal-stt-realtime-1.0.0.pom SHA256SUMS; do
+  curl -fsSLO "$base/$f"
+done
+sha256sum --check --ignore-missing SHA256SUMS
+mvn install:install-file -Dfile=myvocal-stt-realtime-1.0.0.jar -DpomFile=myvocal-stt-realtime-1.0.0.pom \
+    -Dsources=myvocal-stt-realtime-1.0.0-sources.jar -Djavadoc=myvocal-stt-realtime-1.0.0-javadoc.jar
+```
+
+Then add the dependency:
+
+```xml
+<dependency>
+  <groupId>ai.myvocal</groupId>
+  <artifactId>myvocal-stt-realtime</artifactId>
+  <version>1.0.0</version>
+</dependency>
+```
+
+Java 8 or later; no Spring. The only runtime dependency is OkHttp 5 (with Okio and the Kotlin standard
+library, all Java 8 compatible).
+
+## Stream a file (blocking)
+
+```java
+import ai.myvocal.stt.realtime.*;
+import java.nio.file.Paths;
+
+try (RealtimeClient client = RealtimeClient.builder(System.getenv("MYVOCAL_ACCESS_KEY")).build()) {
+    SessionRequest request = new SessionRequest().title("meeting").languageHint("en")
+            .options(new SessionOptions().inputEncoding("pcm_s16le_16000").segmentCommitMode("vad"));
+    RealtimeSession session = client.connect(new ConnectOptions().request(request)
+            .on(RealtimeEvent.TRANSCRIPT_DELTA, e -> System.out.println("  ... " + e.getText()))
+            .on(RealtimeEvent.TRANSCRIPT_FINAL, e -> System.out.println("final: " + e.getText())));
+    try {
+        session.sendFile(Paths.get("speech.wav"), true);   // WAV header checked; paced by sample time
+        FinishResult result = session.finish();
+        System.out.println(result.getStatus() + " " + result.getTranscriptionId() + " "
+                + result.getUsage().getBillableCharacters());
+    } finally {
+        session.close();                                   // local resources only
+    }
+}
+```
+
+## Byte chunks with CompletableFuture and a listener
+
+```java
+RealtimeSession session = client.connectAsync(new ConnectOptions().request(request)
+        .listener(new RealtimeListener() {
+            @Override public void onTranscriptFinal(TranscriptLine line, RealtimeEvent event) { ... }
+            @Override public void onNotice(Notice notice) { ... }
+        })
+        .onCallbackError((error, event) -> log.warn("handler failed on {}", event.getType())))
+        .get(30, TimeUnit.SECONDS);
+byte[] chunk = new byte[1234];                             // any size
+int n;
+while ((n = in.read(chunk)) > 0) {
+    session.sendAudio(chunk, 0, n, null);                  // waits only when the buffer is full
+}
+FinishResult result = session.finishAsync().get(120, TimeUnit.SECONDS);
+session.close();
+```
+
+## Commit, pause and resume
+
+```java
+session.commit();                         // line boundary; keep sending in the same epoch
+session.pause();                          // or pause(RealtimeSession.Via.REST)
+session.resume(RealtimeSession.Via.WS);   // new epoch; sampleOffset restarts at 0
+```
+
+## After a disconnect
+
+```java
+try {
+    FinishResult result = session.finish();          // REST close-out of the same session if needed
+    if (result.isViaRest()) { log.info("closed out: {} ({})", result.getStatus(), result.getCloseoutReason()); }
+} catch (FinishUnconfirmedException e) {
+    String id = e.getSessionId();                    // keep it; later:
+    SessionView view = client.getSession(id);
+    if (!view.isTerminal()) { view = client.finishSession(id, null); }
+}
+```
+
+## Client options
+
+| Builder method | Default | Meaning |
+|---|---|---|
+| `baseUrl` | `https://api.myvocal.ai` | `http`/`https`; the stream uses `ws`/`wss` |
+| `timeouts(new Timeouts().withAckMillis(...))` | see [behaviour guide](/sdks/stt-realtime/behavior#timeouts) | all waits are bounded |
+| `frameMs`, `maxBufferedMs` | 100, 30000 | frame size and the bound of unacknowledged audio |
+| `pingIntervalMillis` | 20000 | client WebSocket ping |
+| `eventQueueSize` | 10000 | bound of events waiting for handlers |
+| `proxy(Proxy)`, `sslSocketFactory(factory, trustManager)`, `httpClient(OkHttpClient)` | JVM defaults | network; a borrowed client is never shut down |
+| `closeoutOnDisconnect` | `true` | REST close-out after an unexpected disconnect |
+
+## Errors
+
+| Exception | When |
+|---|---|
+| `InputInvalidException` | invalid option or combination (not retried) |
+| `AuthenticationException` | invalid key (not retried) |
+| `InsufficientCharactersException` | balance exhausted (not retried) |
+| `ApiException` | other `code != 1` envelopes (`getErrorCode()`, `isRetryable()`, `getRequestId()`) |
+| `AudioFormatException` | format mismatch, or half a sample left at `finish` (`discardPartialSample()`) |
+| `SessionStateException` | e.g. audio while paused |
+| `ConnectionLostException` | audio after the connection was lost |
+| `FinishUnconfirmedException` | the end could not be confirmed; carries `getSessionId()` |
+| `CancellationException` | the calling thread was interrupted |

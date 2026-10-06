@@ -1,0 +1,97 @@
+---
+title: "Real-time SDK — Python"
+description: "Stream audio to MyVocal Speech to Text from Python 3.10+ with blocking or asyncio clients."
+---
+
+`myvocal-stt-realtime` 1.0.0 is not yet on PyPI. Install the wheel from the
+[GitHub Release](https://github.com/MyVocal-AI/myvocal-stt-realtime-sdks/releases/tag/v1.0.0) (the sdist and `SHA256SUMS` are attached there too):
+
+```bash
+pip install https://github.com/MyVocal-AI/myvocal-stt-realtime-sdks/releases/download/v1.0.0/myvocal_stt_realtime-1.0.0-py3-none-any.whl
+```
+
+Python 3.10 or later. Dependencies: `httpx`, `websockets`. `RealtimeClient` (blocking) and
+`AsyncRealtimeClient` (`asyncio`) share one engine.
+
+## Stream a file (blocking)
+
+```python
+import os
+from myvocal_stt_realtime import RealtimeClient, SessionOptions, SessionRequest
+
+request = SessionRequest(title="meeting", language_hint="en",
+                         options=SessionOptions(input_encoding="pcm_s16le_16000", segment_commit_mode="vad"))
+with RealtimeClient(os.environ["MYVOCAL_ACCESS_KEY"]) as client:
+    session = client.connect(request, handlers={"transcript.final": lambda e: print("final:", e.text)})
+    try:
+        session.send_file("speech.wav")          # WAV header checked; paced by sample time
+        result = session.finish()
+    finally:
+        session.close()                          # local resources only
+print(result.status, result.transcription_id, result.usage.billable_characters)
+```
+
+## Byte chunks (asyncio)
+
+```python
+import asyncio, os
+from myvocal_stt_realtime import AsyncRealtimeClient, SessionOptions, SessionRequest
+
+async def main(chunks):
+    async with AsyncRealtimeClient(os.environ["MYVOCAL_ACCESS_KEY"]) as client:
+        session = await client.connect(SessionRequest(options=SessionOptions(input_encoding="pcm_s16le_16000")),
+                                       iterate_events=True)
+        async def printer():
+            async for event in session.events():
+                if event.type == "transcript.final":
+                    print(event.text)
+        task = asyncio.ensure_future(printer())
+        async for chunk in chunks:               # any size; a live source is not paced again
+            await session.send_audio(chunk)
+        result = await session.finish()
+        await session.close()
+        await task
+        return result
+```
+
+## Commit, pause and resume
+
+```python
+session.commit()               # line boundary; same epoch
+session.pause()                # or pause(via="rest")
+session.resume(via="ws")       # new epoch; sample_offset restarts at 0
+```
+
+## After a disconnect
+
+```python
+from myvocal_stt_realtime import FinishUnconfirmedError
+
+try:
+    result = session.finish()                    # REST close-out of the same session if needed
+    if result.via_rest:
+        print("closed out:", result.status, result.closeout_reason)
+except FinishUnconfirmedError as err:
+    view = client.get_session(err.session_id)    # later
+    if not view.is_terminal:
+        view = client.finish_session(err.session_id)
+```
+
+## Client options
+
+| Keyword | Default | Meaning |
+|---|---|---|
+| `base_url` | `https://api.myvocal.ai` | `http`/`https`; the stream uses `ws`/`wss` |
+| `timeouts=Timeouts(...)` | see [behaviour guide](/sdks/stt-realtime/behavior#timeouts) | seconds |
+| `frame_ms`, `max_buffered_ms` | 100, 30000 | frame size and the bound of unacknowledged audio |
+| `ping_interval` | 20 | client WebSocket ping (seconds) |
+| `event_queue_size` | 10000 | bound of events waiting for handlers |
+| `proxy`, `ssl_context`, `http_client` (async only) | environment proxy, system CA | a borrowed `httpx.AsyncClient` is never closed |
+| `closeout_on_disconnect` | `True` | REST close-out after an unexpected disconnect |
+
+## Errors
+
+`InputInvalidError`, `AuthenticationError` and `InsufficientCharactersError` are not retried. Other
+envelopes raise `ApiError` (`error_code`, `retryable`, `request_id`). Also: `AudioFormatError`
+(`discard_partial_sample()`), `SessionStateError`, `ConnectionLostError`, `BackpressureTimeoutError`,
+`FinishUnconfirmedError` (`session_id`) and `TransportError`.
