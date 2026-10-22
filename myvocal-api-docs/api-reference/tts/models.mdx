@@ -12,6 +12,7 @@ Use this page as the source of truth for publicly documented TTS model IDs.
 
 | Model ID | Recommended usage | Languages |
 | --- | --- | --- |
+| `myvocal_v3_5` | Model V3.5 High Quality | Independent language list below; omit language for Auto. |
 | `myvocal_v3` | Explicit V3 request path | See the full list in [V3 Language Codes](/api-reference/tts/v3-language-codes). |
 | `myvocal_v3_accent_enhance` | Explicit Accent request path | 40 language codes plus `auto`. See the Accent model section below. |
 | `english_v2` | V2 explicit English (original accent) | English (original accent). |
@@ -24,6 +25,7 @@ Use this page as the source of truth for publicly documented TTS model IDs.
 ## Public model ID list
 
 ```text
+myvocal_v3_5
 myvocal_v3
 myvocal_v3_accent_enhance
 english_v2
@@ -33,6 +35,112 @@ multilingual_v2
 spanish_la
 portuguese_la
 ```
+
+## Model V3.5 High Quality (`myvocal_v3_5`)
+
+<Note>This candidate documentation is for local preview. Availability requires the corresponding service release.</Note>
+
+Use this public alias with either existing TTS endpoint. Existing defaults, character metering, plans and authentication stay unchanged. Use an existing voice you are permitted to use; the generic voices endpoint does not promise a model-specific compatibility filter for this model.
+
+- Omit `language` (or send `auto`) for automatic detection. Explicit codes use the model-specific table below. Declared language support is not a claim that every voice/language combination has been tested.
+- Default `voiceSettings.stability` is `0.5`; the existing inclusive legal range `0.1`–`1` remains accepted, including explicit `0.1`, `0.5` and `1`. Other models retain their defaults.
+- Text tags such as `[whispering]`, `[shouting]` and `[laughing]` can guide delivery; their effect varies. Keep spoken text with tags. This adds no SSML, speed, style or similarity API field.
+- Nonstream responses contain the complete audio. A stream may terminate if generation or delivery fails after audio begins; do not treat a truncated stream as a completed recording or expect JSON appended to its audio bytes.
+- Before audio is sent, generation errors use the existing MyVocal error envelope (`10003`), invalid languages `10004`, unavailable voices `10005`, and invalid stability `10006`.
+- Only the standard High Quality product is included. No new default model or price multiplier is introduced.
+
+### Model V3.5 language codes
+
+| Code | Language |
+| --- | --- |
+| `auto` or omitted | Auto |
+| `af` | Afrikaans |
+| `am` | Amharic |
+| `ar` | Arabic |
+| `hy` | Armenian |
+| `as` | Assamese |
+| `ast` | Asturian |
+| `az` | Azerbaijani |
+| `be` | Belarusian |
+| `bn` | Bengali |
+| `bs` | Bosnian |
+| `bg` | Bulgarian |
+| `my` | Burmese |
+| `yue` | Cantonese |
+| `ca` | Catalan |
+| `ceb` | Cebuano |
+| `hr` | Croatian |
+| `cs` | Czech |
+| `da` | Danish |
+| `nl` | Dutch |
+| `en` | English |
+| `et` | Estonian |
+| `fil` | Filipino |
+| `fi` | Finnish |
+| `fr` | French |
+| `ff` | Fula (Pulaar) |
+| `gl` | Galician |
+| `ka` | Georgian |
+| `de` | German |
+| `el` | Greek |
+| `gu` | Gujarati |
+| `ha` | Hausa |
+| `he` | Hebrew |
+| `hi` | Hindi |
+| `hu` | Hungarian |
+| `is` | Icelandic |
+| `id` | Indonesian |
+| `it` | Italian |
+| `ja` | Japanese |
+| `kn` | Kannada |
+| `kk` | Kazakh |
+| `ko` | Korean |
+| `ky` | Kyrgyz |
+| `lo` | Lao |
+| `ln` | Lingala |
+| `lt` | Lithuanian |
+| `lg` | Luganda |
+| `lb` | Luxembourgish |
+| `mk` | Macedonian |
+| `ms` | Malay |
+| `ml` | Malayalam |
+| `mt` | Maltese |
+| `zh` | Mandarin Chinese |
+| `mi` | Māori |
+| `mr` | Marathi |
+| `mn` | Mongolian |
+| `ne` | Nepali |
+| `no` | Norwegian Bokmål |
+| `oc` | Occitan |
+| `or` | Odia |
+| `ps` | Pashto |
+| `fa` | Persian |
+| `pl` | Polish |
+| `pt` | Portuguese (Brazil) |
+| `pa` | Punjabi |
+| `ro` | Romanian |
+| `ru` | Russian |
+| `sr` | Serbian |
+| `sn` | Shona |
+| `sd` | Sindhi |
+| `sk` | Slovak |
+| `sl` | Slovenian |
+| `so` | Somali |
+| `ckb` | Sorani Kurdish |
+| `es` | Spanish (LatAm) |
+| `sw` | Swahili |
+| `sv` | Swedish |
+| `tg` | Tajik |
+| `ta` | Tamil |
+| `te` | Telugu |
+| `th` | Thai |
+| `tr` | Turkish |
+| `uk` | Ukrainian |
+| `ur` | Urdu |
+| `uz` | Uzbek |
+| `vi` | Vietnamese |
+| `cy` | Welsh |
+| `wo` | Wolof |
 
 ## V3 language scope
 
