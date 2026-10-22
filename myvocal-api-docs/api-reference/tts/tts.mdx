@@ -61,7 +61,7 @@ description: "Synthesize text and return the complete audio in the response body
 </ParamField>
 
 <Warning>
-For <code>myvocal_v3</code>, explicit legal values are forwarded without rounding into named presets. This API contract does not define additional preset mappings. Continue sending the value in <code>voiceSettings.stability</code>, in 0–1 units; a website display value such as 25 corresponds to <code>0.25</code>, not 25.
+For <code>myvocal_v3</code>, explicit legal values are forwarded without rounding into named presets. This API contract does not define additional preset mappings. Continue sending the value in <code>voiceSettings.stability</code>, in 0–1 units; a website display value such as 25 corresponds to <code>0.25</code>, not 25. Website controls do not change this API's inclusive <code>0.1</code>–<code>1</code> range: <code>0</code> is rejected with <code>10006</code> for every model.
 </Warning>
 
 <Warning>
