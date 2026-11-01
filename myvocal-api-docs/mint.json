@@ -47,7 +47,8 @@
           "group": "Models & languages",
           "pages": [
             "api-reference/tts/models",
-            "api-reference/tts/v3-language-codes"
+            "api-reference/tts/v3-language-codes",
+            "api-reference/tts/v35-language-codes"
           ]
         },
         {

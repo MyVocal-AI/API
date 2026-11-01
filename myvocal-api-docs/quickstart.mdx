@@ -56,6 +56,14 @@ save it to a file. HTTP `200` alone does not mean success: if `Content-Type` is 
 
 That is the whole shortest path. Everything below is optional.
 
+## Model V3.5 High Quality
+
+The service accepts `modelId: "myvocal_v3_5"` on both existing TTS endpoints. Keep your existing voice and authentication, set `voiceSettings.stability` to `0.5` (or omit it for this model's default), and omit `language` for Auto. Explicit languages follow the independent [Model V3.5 language table](/api-reference/tts/v35-language-codes). Existing pricing and character rules are unchanged.
+
+```json
+{"voiceId":"<myvocal_voice_id>","text":"Hello from MyVocal.","modelId":"myvocal_v3_5","voiceSettings":{"stability":0.5}}
+```
+
 ## Optional branches
 
 | Branch | Use it when |

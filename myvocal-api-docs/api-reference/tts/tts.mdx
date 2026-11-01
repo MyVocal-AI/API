@@ -29,6 +29,7 @@ description: "Synthesize text and return the complete audio in the response body
 
 <ParamField body="language" type="string">
   Language selector.
+  <div><code>myvocal_v3_5</code>: optional model-specific ISO code; omit it for Auto. See the <a href="/api-reference/tts/v35-language-codes">Model V3.5 language table</a>.</div>
   <div>Default/V2 path: required and must use existing mapped language values.</div>
   <div><code>myvocal_v3</code>: optional. If provided, it is forwarded to upstream as <code>language</code>. If omitted, upstream auto-detect is used.</div>
   <div>See supported V3 codes in <a href="/api-reference/tts/v3-language-codes">V3 Language Codes</a> (98 languages).</div>
@@ -38,6 +39,7 @@ description: "Synthesize text and return the complete audio in the response body
 <ParamField body="modelId" type="string">
   Optional explicit model selector.
   <div>Omit it to use the default model path.</div>
+  <div>Set <code>myvocal_v3_5</code> to request Model V3.5 High Quality.</div>
   <div>Set <code>myvocal_v3</code> to request the V3 path.</div>
   <div>Set <code>myvocal_v3_accent_enhance</code> to request the Accent model path.</div>
   <div>When the Accent model is requested but its execution path is unavailable, the response is the standard generation error envelope (<code>code = 10003</code>). The request is never silently served by a different model.</div>
@@ -46,8 +48,9 @@ description: "Synthesize text and return the complete audio in the response body
 <ParamField body="voiceSettings" type="object">
   For advanced settings, use suggested values unless you have strong tuning needs.
   <Expandable title="Toggle object">
-    <ParamField body="stability" type="number" default="0.7">
-      <div>a decimal in the range <code>0.1</code> to <code>1</code> inclusive, with a recommended default value of <code>0.7</code>. Values below <code>0.1</code> or above <code>1</code> are rejected; no fixed step is enforced.</div>
+    <ParamField body="stability" type="number">
+      <div>Model V3.5 High Quality defaults to <code>0.5</code>. Model V2 and Model V3 default to <code>0.7</code> when this value is omitted.</div>
+      <div>A decimal in the range <code>0.1</code> to <code>1</code> inclusive. Values below <code>0.1</code> or above <code>1</code> are rejected; no fixed step is enforced.</div>
       <div>When your parameters are set lower, the emotional variation of the TTS audio will be more abundant. Even for the same text, the effects generated multiple times will be different. You can choose the most suitable one by generating the same text's TTS audio multiple times.</div>
       <div>When your parameters are set higher, the emotion of the TTS audio will tend to be consistent.</div>
       <div><b>Accent model note:</b> a value inside the normal legal range (<code>0.1</code> to <code>1</code>) is accepted for compatibility but has no effect on <code>myvocal_v3_accent_enhance</code>. An out-of-range value is still rejected with <code>code = 10006</code>.</div>
@@ -56,9 +59,7 @@ description: "Synthesize text and return the complete audio in the response body
 </ParamField>
 
 <Warning>
-For <code>myvocal_v3</code>, the currently publicly documented stability values are:
-<div>- <code>0.5</code>: natural pronunciation, closer to normal human speech.</div>
-<div>- <code>1</code>: more stable output with less variation.</div>
+For <code>myvocal_v3</code>, explicit legal values are forwarded without rounding into named presets. This API contract does not define additional preset mappings. Continue sending the value in <code>voiceSettings.stability</code>, in 0–1 units; a website display value such as 25 corresponds to <code>0.25</code>, not 25. Website controls do not change this API's inclusive <code>0.1</code>–<code>1</code> range: <code>0</code> is rejected with <code>10006</code> for every model.
 </Warning>
 
 <Warning>
@@ -201,3 +202,17 @@ audio/mpeg stream (binary)
 - `Invalid stability option.` (`code = 10006`): `voiceSettings.stability` is outside the legal range.
 - `code = 10003`: the Accent model path was requested but its execution path is unavailable. The request is not silently served by another model.
 - `code = -1`: upstream or backend failed to complete generation.
+
+### Model V3.5 High Quality example
+
+```json
+{
+  "voiceId": "<myvocal_voice_id>",
+  "text": "Hello from MyVocal.",
+  "modelId": "myvocal_v3_5",
+  "language": "en",
+  "voiceSettings": { "stability": 0.5 }
+}
+```
+
+Omit `language` for automatic detection. This model has its own language list. Unsupported codes return `10004`; legal stability remains inclusive `0.1`–`1`. Errors before audio use the existing JSON envelope. Errors after audio begins terminate the transfer without appending JSON; retrying is a new request, not an idempotent continuation.
