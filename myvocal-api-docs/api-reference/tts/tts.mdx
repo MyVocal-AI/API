@@ -6,8 +6,6 @@ description: "Synthesize text and return the complete audio in the response body
 
 <sub>**Text to Speech** · Workflow: [TTS quickstart](/quickstart) · Models: [TTS Models & Migration](/api-reference/tts/models)</sub>
 
-<Note>Model V3.5 High Quality support described here is a local preview for the corresponding service release.</Note>
-
 ### Header
 
 <ParamField header="accessKey" type="string" required>
@@ -31,7 +29,7 @@ description: "Synthesize text and return the complete audio in the response body
 
 <ParamField body="language" type="string">
   Language selector.
-  <div><code>myvocal_v3_5</code>: optional model-specific ISO code; omit it for Auto. See the Model V3.5 language table in <a href="/api-reference/tts/models">Models</a>.</div>
+  <div><code>myvocal_v3_5</code>: optional model-specific ISO code; omit it for Auto. See the <a href="/api-reference/tts/v35-language-codes">Model V3.5 language table</a>.</div>
   <div>Default/V2 path: required and must use existing mapped language values.</div>
   <div><code>myvocal_v3</code>: optional. If provided, it is forwarded to upstream as <code>language</code>. If omitted, upstream auto-detect is used.</div>
   <div>See supported V3 codes in <a href="/api-reference/tts/v3-language-codes">V3 Language Codes</a> (98 languages).</div>
@@ -52,7 +50,7 @@ description: "Synthesize text and return the complete audio in the response body
   <Expandable title="Toggle object">
     <ParamField body="stability" type="number">
       <div>Model V3.5 High Quality defaults to <code>0.5</code>. Model V2 and Model V3 default to <code>0.7</code> when this value is omitted.</div>
-      <div>a decimal in the range <code>0.1</code> to <code>1</code> inclusive, with a recommended default value of <code>0.7</code>. Values below <code>0.1</code> or above <code>1</code> are rejected; no fixed step is enforced.</div>
+      <div>A decimal in the range <code>0.1</code> to <code>1</code> inclusive. Values below <code>0.1</code> or above <code>1</code> are rejected; no fixed step is enforced.</div>
       <div>When your parameters are set lower, the emotional variation of the TTS audio will be more abundant. Even for the same text, the effects generated multiple times will be different. You can choose the most suitable one by generating the same text's TTS audio multiple times.</div>
       <div>When your parameters are set higher, the emotion of the TTS audio will tend to be consistent.</div>
       <div><b>Accent model note:</b> a value inside the normal legal range (<code>0.1</code> to <code>1</code>) is accepted for compatibility but has no effect on <code>myvocal_v3_accent_enhance</code>. An out-of-range value is still rejected with <code>code = 10006</code>.</div>
