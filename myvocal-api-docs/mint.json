@@ -199,6 +199,8 @@
       "group": "Interpretation",
       "pages": [
         "guides/interpretation-quickstart",
+        "guides/interpretation-realtime-quickstart",
+        "api-reference/interpretation/realtime",
         {
           "group": "Interpretation API reference",
           "pages": [

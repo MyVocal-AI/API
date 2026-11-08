@@ -41,6 +41,8 @@ curl --location 'https://api.myvocal.ai/sound_clone/api/v1/user/info' \
 
 Text-to-Music (`/sound_clone/api/v1/music`) and Interpretation (`/sound_clone/api/v1/interpretation`) use the same `accessKey` header, the same public host and the same API-key account as every other endpoint on this page. There is no separate key, scope, host or login for them.
 
+Realtime translation uses the same account API key. Keep the key on your server. For browser connections, your server requests a single-use ticket from MyVocal for the browser to use during the WebSocket upgrade. See the [realtime translation quickstart](/guides/interpretation-realtime-quickstart).
+
 They do **not** require a cloned voice and do **not** require a browser/workspace session. The account that owns the key is always the owner of the resources it creates: no request body, path or query parameter can select a different owner. Requesting a resource you do not own and requesting one that does not exist return the same not-found error, so the API never reveals whether an identifier exists.
 
 Three differences from the synchronous endpoints are worth remembering:

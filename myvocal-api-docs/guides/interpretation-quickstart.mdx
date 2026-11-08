@@ -8,6 +8,8 @@ description: "Translate and dub uploaded audio/video: upload a file, quote, gene
 Interpretation takes an **uploaded audio or video file** and produces a translated, dubbed version of it, asynchronously. It is not live/interpreting in real time and it is not a microphone or WebSocket service: you upload a file, then poll until the result is ready. No cloned voice, workspace session or callback URL is required — only the `accessKey` header.
 </Info>
 
+This guide covers translation and dubbing of uploaded files. To translate audio as it arrives, see the [realtime translation quickstart](/guides/interpretation-realtime-quickstart).
+
 Runnable clients for this guide: [`examples/interpretation/quickstart.py`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/interpretation/quickstart.py) and [`examples/interpretation/quickstart.mjs`](https://github.com/MyVocal-AI/API/blob/main/myvocal-api-docs/examples/interpretation/quickstart.mjs). Each one implements the whole flow below, including the multipart upload and the polling.
 
 ## Endpoint summary

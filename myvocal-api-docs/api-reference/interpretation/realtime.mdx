@@ -1,0 +1,53 @@
+---
+title: "Realtime translation API reference"
+---
+
+API origin is `https://api.myvocal.ai`. Base path is `/sound_clone/api/v1/interpretation/realtime`. REST requests use `accessKey`. Responses shown here are field descriptions. Example values are synthetic.
+
+| Request | Input | Successful data |
+|---|---|---|
+| `GET /capabilities` | Account key | Account access state, plan and pricing, available Characters, source and target language suggestions, input and output audio formats, and available voice references |
+| `GET /voices` | Account key | `voices`, including the default entry with `voiceRef: null`. Select another voice using its returned `voiceRef`. |
+| `POST /sessions` | `Idempotency-Key`, empty body or `{}` | `sessionId`, `mode`, `state`, `planKey`, `rateVersion`, locked `offlineRatePerMinute`, multiplier numerator and denominator, `revision`, `usage`, and `rounds` |
+| `GET /sessions/{sessionId}` | Session ID | Current session and usage snapshot, including round states, `submittedSamples`, and `terminalCode` |
+| `POST /sessions/{sessionId}/rounds` | `Idempotency-Key`, required `targetLanguage`, optional `sourceLanguage`, `voiceRef`, and `audioEnabled` | New or replayed round with `roundId` and relative `streamUrl`. Omit the source language or set it to null for automatic detection. Omit the voice or set it to null for the default. Omit `audioEnabled` for text only. |
+| `POST /sessions/{sessionId}/rounds/{roundId}/tickets` | Session and round IDs | `ticket`, `expiresInSeconds`, and relative `streamUrl`. Use a fresh ticket for a round that has not started. |
+| `POST /sessions/{sessionId}/rounds/{roundId}/cancel` | Session and round IDs | Latest session snapshot. Accepted audio can still finalize. |
+| `POST /sessions/{sessionId}/end` | Session ID | Latest session snapshot. Poll the session if it is still `ENDING`. |
+
+Use a distinct idempotency key for each new session and each new round. Reuse the original key and parameters to check a creation attempt with an unknown result. A key can contain up to 128 characters. Reusing a round key with different parameters returns a conflict.
+
+Example request body for creating a Spanish text-only round with automatic source detection.
+
+```json
+{"sourceLanguage":null,"targetLanguage":"es","audioEnabled":false}
+```
+
+Use the relative `streamUrl` on the same API origin. The selected protocol on browser connections is `myvocal.rtt.v1`. Each event carries `sessionId` and `roundId`.
+
+| Event | Fields and use |
+|---|---|
+| `ready` | Begin sending audio after this event. |
+| `input_ack` | `throughSequence` and `acceptedSamples` report the highest accepted continuous sequence and the cumulative accepted samples. |
+| `partial`, `final`, `translated` | `text` and `segmentId`. Partial events are temporary source text. Final and translated events contain completed output fragments. Treat a segment ID as the identifier of one output event. |
+| `audio` | When audio is enabled, decode `data` as base64 PCM S16LE and play it at the reported `sampleRate`. Process chunks in sequence. |
+| `input_ended` | Input has stopped. Continue reading output while the round finishes. |
+| `usage` | `confirmedCharacters`, `pendingCharacters`, and `revision` inside `usage`. |
+| `error` | `code` and `terminal`. An audio output problem can occur while translation still completes. Check the final round state. |
+| `done` | `state` of `SETTLED` or `RELEASED`, plus `terminalCode` and `usage`. The stream closes after this final event. If the connection was lost, query the same session. |
+
+Send text messages with type `audio`, an integer `sequence` starting at 0, and base64 `data`. Use headerless PCM signed 16-bit little-endian, 16 kHz, mono. Each decoded frame must contain an even number of bytes from 2 to 32,000. Send frames at capture speed. About 100 ms per frame is a practical starting point. A duplicate sequence is ignored. A gap or invalid frame ends the round. Send `{"type":"finish"}` or `{"type":"cancel"}` to stop input.
+
+REST domain failures use HTTP status plus `code: -1`, with a string code in `data.code`. Invalid or missing API keys follow the platform response of HTTP 200 with JSON `code: 401`.
+
+| Transport result | Code examples | Action |
+|---|---|---|
+| HTTP 400 | `RTT_INPUT_INVALID` | Check the request fields, audio format, or required idempotency header. |
+| HTTP 402 | `RTT_INSUFFICIENT_CHARACTERS` | Check the account's available Characters. Check the session state if a round already started. |
+| HTTP 403 | `INTERPRETATION_PAID_PLAN_REQUIRED` | Check the account's active plan. |
+| HTTP 404 | `RTT_NOT_FOUND` | Check the session or round ID and the account and API origin used to create it. |
+| HTTP 409 | `RTT_SESSION_ENDED`, `RTT_TICKET_INVALID`, `RTT_IDEMPOTENCY_CONFLICT` | Query the existing session. For a ticket issue, issue a fresh ticket only for a round that has not started. |
+| HTTP 422 | `RTT_VOICE_UNAVAILABLE` | Choose a voice reference from the current account's list or use the default. |
+| HTTP 503 | `RTT_LEDGER_UNAVAILABLE` | Query the original session before starting another attempt if a request's outcome is unknown. |
+| WebSocket upgrade rejected | HTTP 403 | Check the server key or the browser's single-use ticket, protocol list, and round. |
+| WebSocket `error` event | `RTT_INPUT_INVALID`, `RTT_INSUFFICIENT_CHARACTERS`, `RTT_AUDIO_OUTPUT_ERROR`, `RTT_UPSTREAM_UNAVAILABLE` | Use the event's `terminal` flag and query the session if the connection ends before `done`. |

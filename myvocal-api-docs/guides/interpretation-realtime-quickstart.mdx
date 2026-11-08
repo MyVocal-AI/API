@@ -1,0 +1,40 @@
+---
+title: "Realtime translation quickstart"
+description: "Stream live audio and receive translated text and optional translated speech."
+---
+
+## Before you start
+
+Use your existing MyVocal API key from Account info in the `accessKey` header on your server. Inspect the capabilities response for account access, rates, languages and formats. Create a session, then create a round with a target language. Send an `Idempotency-Key` when creating each resource. A retry with the same key and parameters returns the existing resource. If the connection drops after a round begins, check that session before creating another round.
+
+## Connect from your server
+
+Connect your server to the round’s WebSocket using the `accessKey` header. For a browser, have your server obtain a fresh single-use connection ticket and pass it to the browser. Offer `myvocal.rtt.v1` and `ticket.<ticket>` as WebSocket subprotocols. Keep the API key on your server. Tickets expire after 60 seconds and a newly issued ticket replaces the previous one for the round.
+
+**[Server example](https://github.com/MyVocal-AI/API/tree/main/myvocal-api-docs/examples/interpretation-realtime).** Run the sample with Node.js 22. Set `MYVOCAL_RTT_ORIGIN` to the API origin and provide `MYVOCAL_ACCESS_KEY` through your server's secret configuration. Install dependencies with `npm ci`. Run `node server.mjs ./synthetic-short.pcm es` using a short synthetic mono PCM file at 16 kHz. Read the translated text from the event stream and check the final usage before starting another paid round.
+
+## Connect from a browser
+
+**[Browser example](https://github.com/MyVocal-AI/API/tree/main/myvocal-api-docs/examples/interpretation-realtime).** Run `node broker.mjs` with the same server configuration. Open the local broker origin and bind the provided browser functions to your application's controls. Start microphone or tab capture from a user action. The broker obtains a short-lived ticket, and the browser sends the ticket as a WebSocket subprotocol. Authorize users in your application before allowing them to create or query a session. Keep the account API key in the broker process. Close capture when the user stops and read the session for the final state.
+
+## Send audio
+
+Wait for `ready`. Send base64 PCM S16LE, mono, at 16 kHz in numbered `audio` messages starting at sequence 0. Use the sample rate reported by each translated-audio event. Send `finish` when the source ends, then read until `done`. An input acknowledgment records accepted samples. A final settlement depends on the samples submitted for a successfully completed round.
+
+The realtime voice list returns references for use in a realtime round. Use a returned `system:<id>` or `speaker:<id>` reference, or use the default. A personal voice ID from the general API can be used as `speaker:<id>` when it is also available in your realtime voice list.
+
+## Usage and outcomes
+
+The realtime rate is 1.2 times the applicable file rate per source minute per target language. The session fixes the rate at creation. MyVocal rounds up the accumulated billable audio for each target language once, then adds the totals. Captions and translated speech have the same rate. Silence in a successful round counts. A round that finishes without translated text or fails to complete releases its reservation.
+
+Finish, cancel, end and disconnect can trigger finalization of audio already accepted. A cancelled round may settle if it finishes with a valid translation. Previously settled rounds remain charged. Read `done` or query the session to check the outcome. REST long integer fields are decimal strings. WebSocket long integer fields are JSON numbers.
+
+API sessions retain the state and usage information needed to report outcomes. Your application receives subtitles and optional translated speech over the stream. Save them on your side if you need them later. API sessions do not appear in MyVocal web History.
+
+The stream delivers captions and optional translated speech as events. Session queries report round states and usage. Save captions or audio in your own application if you need them later.
+
+## Troubleshoot
+
+Check both the HTTP status and the JSON `code` on REST responses. A successful response uses `code: 1`. A request with an invalid or missing API key can return HTTP 200 with `code: 401`. Check the key on your server and use the request ID when contacting Support. For a WebSocket authorization failure, check the account and round, or obtain a new ticket if the previous one expired or was used. Check the session state before repeating a request whose outcome is unknown.
+
+[Realtime translation API reference](/api-reference/interpretation/realtime)

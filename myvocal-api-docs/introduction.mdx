@@ -39,11 +39,12 @@ create a voice or try every product first.
     **Result:** an original song you poll for, then play or download as MP3.<br />
     **Start:** Text-to-Music quickstart →
   </Card>
-  <Card title="Interpretation" icon="language" href="/guides/interpretation-quickstart">
-    **Translate and dub uploaded audio/video.**<br />
-    **Input:** an uploaded audio or video file and target languages.<br />
-    **Result:** translated, dubbed versions you poll for, then play or export.<br />
-    **Start:** Interpretation quickstart →
+  <Card title="Interpretation" icon="language">
+    Translate recorded audio or video with the file API, or stream live audio with the realtime API.
+
+    [File translation quickstart](/guides/interpretation-quickstart)
+
+    [Realtime translation quickstart](/guides/interpretation-realtime-quickstart)
   </Card>
 </CardGroup>
 
@@ -91,7 +92,7 @@ WebSocket API directly.
 <a id="core-workflow"></a>
 
 - Text to Speech and AI Cover take a `voiceId`. Cloning your own voice is optional; see
-  [How to use voices](/guides/voice-quickstart). The other products do not use voices.
+  [How to use voices](/guides/voice-quickstart).
 
 <a id="how-tts-models-work"></a>
 
@@ -110,7 +111,7 @@ Products return results in different ways. Use the mechanism of the product you 
 | Speech to Text — Batch | Poll the transcription; an optional [signed completion notification](/guides/stt-batch-quickstart#completion-notifications) is available |
 | Speech to Text — Real-time | WebSocket events, then `finish` |
 | AI Cover, Cover voice creation and improvement | [Cover callbacks](/callback) to your `callbackUrl` |
-| Text to Music, Interpretation | Poll the project or job; see [Async jobs, polling and retries](/guides/async-jobs-and-retries) |
+| Text to Music | Poll the project or job; see [Async jobs, polling and retries](/guides/async-jobs-and-retries) |
 
 For how Speech to Text, Text to Music and Interpretation charge Characters, see [Characters and billing](/guides/characters-and-quotes).
 Your plan and balance are returned by [Get account information](/api-reference/user/getInfo).
