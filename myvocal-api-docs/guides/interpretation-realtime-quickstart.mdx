@@ -11,11 +11,11 @@ Use your existing MyVocal API key from Account info in the `accessKey` header on
 
 Connect your server to the round’s WebSocket using the `accessKey` header. For a browser, have your server obtain a fresh single-use connection ticket and pass it to the browser. Offer `myvocal.rtt.v1` and `ticket.<ticket>` as WebSocket subprotocols. Keep the API key on your server. Tickets expire after 60 seconds and a newly issued ticket replaces the previous one for the round.
 
-**[Server example](https://github.com/MyVocal-AI/API/tree/main/myvocal-api-docs/examples/interpretation-realtime).** Run the sample with Node.js 22. Set `MYVOCAL_RTT_ORIGIN` to the API origin and provide `MYVOCAL_ACCESS_KEY` through your server's secret configuration. Install dependencies with `npm ci`. Run `node server.mjs ./synthetic-short.pcm es` using a short synthetic mono PCM file at 16 kHz. Read the translated text from the event stream and check the final usage before starting another paid round.
+**[Server example](/downloads/interpretation-realtime-examples.zip).** Run the sample with Node.js 22. Set `MYVOCAL_RTT_ORIGIN` to the API origin and provide `MYVOCAL_ACCESS_KEY` through your server's secret configuration. Install dependencies with `npm ci`. Run `node server.mjs ./synthetic-short.pcm es` using a short synthetic mono PCM file at 16 kHz. Read the translated text from the event stream and check the final usage before starting another paid round.
 
 ## Connect from a browser
 
-**[Browser example](https://github.com/MyVocal-AI/API/tree/main/myvocal-api-docs/examples/interpretation-realtime).** Run `node broker.mjs` with the same server configuration. Open the local broker origin and bind the provided browser functions to your application's controls. Start microphone or tab capture from a user action. The broker obtains a short-lived ticket, and the browser sends the ticket as a WebSocket subprotocol. Authorize users in your application before allowing them to create or query a session. Keep the account API key in the broker process. Close capture when the user stops and read the session for the final state.
+**[Browser example](/downloads/interpretation-realtime-examples.zip).** Run `node broker.mjs` with the same server configuration. Open the local broker origin and bind the provided browser functions to your application's controls. Start microphone or tab capture from a user action. The broker obtains a short-lived ticket, and the browser sends the ticket as a WebSocket subprotocol. Authorize users in your application before allowing them to create or query a session. Keep the account API key in the broker process. Close capture when the user stops and read the session for the final state.
 
 ## Send audio
 
