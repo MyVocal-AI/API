@@ -6,6 +6,9 @@
     "light": "/logo/light.svg"
   },
   "favicon": "/favicon.svg",
+  "metadata": {
+    "canonical": "https://docs.myvocal.ai"
+  },
   "colors": {
     "primary": "#9563FF",
     "light": "#AE87FF",
